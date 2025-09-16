@@ -635,7 +635,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     // Create OPDS library and shelf
     try {
       const opdsService = new OPDSService();
-      const feed = await opdsService.fetchFeed(opdsUrl, { username, password });
+      const feed = await opdsService.fetchFeed(opdsUrl, { username, password }, undefined, 1, 50);
       const books = opdsService.getBooks(feed);
       
       // Create library
@@ -654,9 +654,25 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         setCurrentView('shelf');
     } catch (error) {
       console.error('Failed to create OPDS library:', error);
+
+      // Extract detailed error message
+      let errorMessage = '创建OPDS图书馆失败';
+      if (error instanceof Error) {
+        // If it's a network error (API route not found), provide helpful guidance
+        if (error.message.includes('404') || error.message.includes('Not Found')) {
+          errorMessage = '无法访问OPDS代理服务。请确保应用程序正确安装。';
+        } else if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
+          errorMessage = '网络连接失败。请检查URL和网络连接。';
+        } else {
+          // Include the actual error message for debugging
+          errorMessage = `创建OPDS图书馆失败: ${error.message}`;
+        }
+      }
+
       eventDispatcher.dispatch('toast', {
-        message: '创建OPDS图书馆失败',
+        message: errorMessage,
         type: 'error',
+        timeout: 10000, // Show error longer for debugging
       });
     }
   };
@@ -664,7 +680,54 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const handleTryOPDSWithoutAuth = async () => {
     setShowOPDSCredentialsDialog(false);
     setOpdsCredentials(undefined);
-    setShowOPDSLibraryView(true);
+
+    // Try to create OPDS library without credentials
+    try {
+      console.log('Trying OPDS without authentication for:', opdsUrl);
+      const opdsService = new OPDSService();
+      const feed = await opdsService.fetchFeed(opdsUrl, undefined, undefined, 1, 50); // No credentials
+      const books = opdsService.getBooks(feed);
+
+      // Create library
+      const library = opdsLibraryManager.createLibrary(feed, opdsUrl);
+      opdsLibraryManager.updateLibraryBooks(library.id, books);
+
+      // Create shelf
+      const shelf = opdsLibraryManager.createShelf(library.id, library.name);
+      setCurrentShelfId(shelf.id);
+      setCurrentLibrary(library);
+
+      // Update OPDS libraries list
+      setOpdsLibraries(opdsLibraryManager.getAllLibraries());
+
+      // Navigate to the shelf view directly
+      setCurrentView('shelf');
+
+      eventDispatcher.dispatch('toast', {
+        message: `成功连接到OPDS书库: ${library.name}`,
+        type: 'success',
+      });
+    } catch (error) {
+      console.error('Failed to create OPDS library without auth:', error);
+
+      // If it fails, fall back to showing the library view for manual testing
+      setShowOPDSLibraryView(true);
+
+      let errorMessage = '连接OPDS书库失败';
+      if (error instanceof Error) {
+        if (error.message.includes('401') || error.message.includes('Authentication') || error.message.includes('认证')) {
+          errorMessage = '此OPDS服务器需要身份验证。请返回提供用户名和密码。';
+        } else {
+          errorMessage = `连接失败: ${error.message}`;
+        }
+      }
+
+      eventDispatcher.dispatch('toast', {
+        message: errorMessage,
+        type: 'warning',
+        timeout: 8000,
+      });
+    }
   };
 
   const handleOpenOPDSLibrary = async (library: OPDSLibrary) => {

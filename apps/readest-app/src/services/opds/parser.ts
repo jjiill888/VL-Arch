@@ -237,6 +237,12 @@ export class OPDSParser {
     const opensearchStartIndex = feed.querySelector('opensearch\\:startIndex, startIndex');
     const opensearchItemsPerPage = feed.querySelector('opensearch\\:itemsPerPage, itemsPerPage');
 
+    // Extract pagination links
+    const nextLink = links.find(link => link.rel.includes('next'));
+    const prevLink = links.find(link => link.rel.includes('prev'));
+    const firstLink = links.find(link => link.rel.includes('first'));
+    const lastLink = links.find(link => link.rel.includes('last'));
+
     return {
       id,
       title,
@@ -253,6 +259,11 @@ export class OPDSParser {
       ...(opensearchItemsPerPage && {
         opensearchItemsPerPage: parseInt(this.getTextContent(opensearchItemsPerPage), 10),
       }),
+      // Add pagination links
+      ...(nextLink && { nextLink: nextLink.href }),
+      ...(prevLink && { prevLink: prevLink.href }),
+      ...(firstLink && { firstLink: firstLink.href }),
+      ...(lastLink && { lastLink: lastLink.href }),
     };
   }
 

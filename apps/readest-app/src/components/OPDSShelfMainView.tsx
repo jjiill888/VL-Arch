@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MdDownload, MdInfo, MdRefresh, MdBook, MdBookmark, MdSort, MdFolder, MdArrowForward, MdHome } from 'react-icons/md';
+import { MdDownload, MdInfo, MdRefresh, MdBook, MdFolder, MdArrowForward } from 'react-icons/md';
 import { useTranslation } from '@/hooks/useTranslation';
 import { eventDispatcher } from '@/utils/event';
 import Spinner from './Spinner';
@@ -12,7 +12,6 @@ import {
   OPDSLibraryShelf,
   OPDSLibrary
 } from '@/services/opds';
-import { Book } from '@/types/book';
 import { LibrarySortByType } from '@/types/settings';
 
 interface OPDSShelfMainViewProps {
@@ -29,16 +28,15 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
   const [shelf, setShelf] = useState<OPDSLibraryShelf | null>(null);
   const [library, setLibrary] = useState<OPDSLibrary | null>(null);
-  const [currentFeed, setCurrentFeed] = useState<OPDSFeed | null>(null);
-  const [currentUrl, setCurrentUrl] = useState<string>('');
+  const [, setCurrentFeed] = useState<OPDSFeed | null>(null);
+  const [, setCurrentUrl] = useState<string>('');
   const [navigationItems, setNavigationItems] = useState<OPDSNavigationItem[]>([]);
   const [availableBooks, setAvailableBooks] = useState<OPDSBook[]>([]);
-  const [downloadedBooks, setDownloadedBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [downloadingBooks, setDownloadingBooks] = useState<Set<string>>(new Set());
-  const [sortBy, setSortBy] = useState<LibrarySortByType>('created'); // Default to "Recently Added"
-  const [isAscending, setIsAscending] = useState(false); // Default to descending (newest first)
+  const [sortBy] = useState<LibrarySortByType>('created'); // Default to "Recently Added"
+  const [isAscending] = useState(false); // Default to descending (newest first)
   const [breadcrumbs, setBreadcrumbs] = useState<Array<{title: string, url: string}>>([]);
 
   const loadShelfData = useCallback(async () => {
@@ -57,7 +55,6 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     }
 
     setLibrary(libraryData);
-    setDownloadedBooks(shelfData.books);
 
     // Load root OPDS feed inline to avoid circular dependency
     setLoading(true);
@@ -225,47 +222,11 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     }
   }, [shelfId, loadShelfData]);
 
-  // Sort downloaded books
-  const sortedDownloadedBooks = useMemo(() => {
-    return [...downloadedBooks].sort((a, b) => {
-      let aValue: any, bValue: any;
-
-      switch (sortBy) {
-        case 'title':
-          aValue = a.title?.toLowerCase() || '';
-          bValue = b.title?.toLowerCase() || '';
-          break;
-        case 'author':
-          aValue = a.authors?.[0]?.toLowerCase() || '';
-          bValue = b.authors?.[0]?.toLowerCase() || '';
-          break;
-        case 'created':
-          aValue = a.createdAt || 0;
-          bValue = b.createdAt || 0;
-          break;
-        case 'updated':
-          aValue = a.updatedAt || 0;
-          bValue = b.updatedAt || 0;
-          break;
-        case 'format':
-          aValue = a.format?.toLowerCase() || '';
-          bValue = b.format?.toLowerCase() || '';
-          break;
-        default:
-          aValue = a.createdAt || 0;
-          bValue = b.createdAt || 0;
-      }
-
-      if (aValue < bValue) return isAscending ? -1 : 1;
-      if (aValue > bValue) return isAscending ? 1 : -1;
-      return 0;
-    });
-  }, [downloadedBooks, sortBy, isAscending]);
 
   // Sort available books
   const sortedAvailableBooks = useMemo(() => {
     return [...availableBooks].sort((a, b) => {
-      let aValue: any, bValue: any;
+      let aValue: string | number, bValue: string | number;
 
       switch (sortBy) {
         case 'title':
@@ -298,13 +259,6 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     });
   }, [availableBooks, sortBy, isAscending]);
 
-  const sortByOptions = [
-    { label: _('Title'), value: 'title' },
-    { label: _('Author'), value: 'author' },
-    { label: _('Date Added'), value: 'created' },
-    { label: _('Date Published'), value: 'updated' },
-    { label: _('Format'), value: 'format' },
-  ];
 
   if (error) {
     return (
@@ -353,7 +307,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
             </div>
           )}
           <p className='text-base-content/70 mt-1'>
-            {downloadedBooks.length} downloaded • {availableBooks.length} available • {navigationItems.length} categories
+            {availableBooks.filter(book => opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book)).length} downloaded • {availableBooks.length} available • {navigationItems.length} categories
           </p>
         </div>
         <button
@@ -401,35 +355,6 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
           </div>
         )}
 
-        {/* Downloaded books */}
-        {sortedDownloadedBooks.length > 0 && (
-          <div className='mb-8'>
-            <h3 className='text-lg font-semibold mb-4 flex items-center gap-2'>
-              <MdBookmark className='text-primary' />
-              {_('Downloaded Books')}
-            </h3>
-            <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
-              {sortedDownloadedBooks.map((book) => (
-                <div key={book.hash} className='bg-base-100 rounded-lg shadow hover:shadow-lg transition-shadow p-3'>
-                  <div className='aspect-[3/4] bg-base-300 rounded mb-2 flex items-center justify-center'>
-                    <MdBook className='text-3xl text-base-content/50' />
-                  </div>
-                  <h4 className='font-semibold text-sm truncate' title={book.title}>
-                    {book.title}
-                  </h4>
-                  <p className='text-xs text-base-content/70 truncate'>
-                    {book.authors?.join(', ')}
-                  </p>
-                  <div className='mt-2'>
-                    <span className='text-xs bg-success text-success-content px-2 py-1 rounded'>
-                      {_('Downloaded')}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Available books */}
         {sortedAvailableBooks.length > 0 && (
@@ -440,24 +365,13 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
             </h3>
             <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
               {sortedAvailableBooks.map((book) => {
-                const isDownloaded = downloadedBooks.some(db => db.title === book.title && db.authors?.join(', ') === book.authors.join(', '));
+                const isDownloaded = opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book);
                 const isDownloading = downloadingBooks.has(book.id);
 
                 return (
                   <div key={book.id} className='bg-base-100 rounded-lg shadow hover:shadow-lg transition-shadow p-3'>
                     <div className='aspect-[3/4] bg-base-300 rounded mb-2 flex items-center justify-center'>
-                      {book.coverImageUrl ? (
-                        <img
-                          src={book.coverImageUrl}
-                          alt={book.title}
-                          className='w-full h-full object-cover rounded'
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <MdBook className='text-3xl text-base-content/50' />
-                      )}
+                      <MdBook className='w-12 h-12 text-base-content/30' />
                     </div>
                     <h4 className='font-semibold text-sm truncate' title={book.title}>
                       {book.title}
@@ -482,7 +396,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
                           className='btn btn-primary btn-xs w-full gap-1'
                         >
                           {isDownloading ? (
-                            <Spinner loading size='xs' />
+                            <Spinner loading />
                           ) : (
                             <MdDownload />
                           )}
@@ -498,7 +412,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
         )}
 
         {/* Empty state */}
-        {navigationItems.length === 0 && availableBooks.length === 0 && downloadedBooks.length === 0 && !loading && (
+        {navigationItems.length === 0 && availableBooks.length === 0 && !loading && (
           <div className='flex flex-col items-center justify-center h-full text-center'>
             <MdBook className='text-6xl text-base-content/30 mb-4' />
             <h3 className='text-xl font-semibold mb-2'>{_('No Content')}</h3>

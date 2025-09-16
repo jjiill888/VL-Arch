@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MdDownload, MdInfo, MdRefresh } from 'react-icons/md';
+import { MdDownload, MdInfo, MdRefresh, MdBook } from 'react-icons/md';
 import { useTranslation } from '@/hooks/useTranslation';
 import { eventDispatcher } from '@/utils/event';
 import Dialog from './Dialog';
@@ -249,20 +249,9 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
                         key={book.id}
                         className="flex gap-3 p-3 bg-base-100 border border-base-300 rounded-lg hover:bg-base-200 transition-colors"
                       >
-                        {/* Cover Image */}
-                        <div className="w-16 h-20 bg-base-300 rounded overflow-hidden flex-shrink-0">
-                          {book.coverImageUrl ? (
-                            <img
-                              src={book.coverImageUrl}
-                              alt={book.title}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-base-content/30">
-                              <MdInfo className="w-6 h-6" />
-                            </div>
-                          )}
+                        {/* Book Icon */}
+                        <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0">
+                          <MdBook className="w-8 h-8 text-base-content/30" />
                         </div>
 
                         {/* Book Details */}

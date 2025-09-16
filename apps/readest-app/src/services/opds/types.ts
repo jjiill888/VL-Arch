@@ -42,6 +42,11 @@ export interface OPDSFeed {
   opensearchTotalResults?: number;
   opensearchStartIndex?: number;
   opensearchItemsPerPage?: number;
+  // Pagination links
+  nextLink?: string;
+  prevLink?: string;
+  firstLink?: string;
+  lastLink?: string;
 }
 
 export interface OPDSBook {
