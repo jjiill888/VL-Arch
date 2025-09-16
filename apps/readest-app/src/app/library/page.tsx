@@ -58,6 +58,7 @@ import OPDSUrlDialog from '@/components/OPDSUrlDialog';
 import OPDSCredentialsDialog from '@/components/OPDSCredentialsDialog';
 import OPDSLibraryView from '@/components/OPDSLibraryView';
 import OPDSShelfView from '@/components/OPDSShelfView';
+import OPDSShelfMainView from '@/components/OPDSShelfMainView';
 
 const LibraryPageWithSearchParams = () => {
   const searchParams = useSearchParams();
@@ -97,9 +98,11 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const [showOPDSCredentialsDialog, setShowOPDSCredentialsDialog] = useState(false);
   const [showOPDSLibraryView, setShowOPDSLibraryView] = useState(false);
   const [showOPDSShelfView, setShowOPDSShelfView] = useState(false);
+  const [currentView, setCurrentView] = useState<'home' | 'shelf'>('home');
   const [opdsUrl, setOpdsUrl] = useState('');
   const [opdsCredentials, setOpdsCredentials] = useState<{ username: string; password: string } | undefined>();
   const [currentShelfId, setCurrentShelfId] = useState<string>('');
+  const [currentLibrary, setCurrentLibrary] = useState<OPDSLibrary | null>(null);
   const [opdsLibraries, setOpdsLibraries] = useState<OPDSLibrary[]>([]);
   const demoBooks = useDemoBooks();
   const osRef = useRef<OverlayScrollbarsComponentRef>(null);
@@ -638,15 +641,17 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       // Create library
       const library = opdsLibraryManager.createLibrary(feed, opdsUrl, { username, password });
       opdsLibraryManager.updateLibraryBooks(library.id, books);
-      
+
         // Create shelf
         const shelf = opdsLibraryManager.createShelf(library.id, library.name);
         setCurrentShelfId(shelf.id);
+        setCurrentLibrary(library);
 
         // Update OPDS libraries list
         setOpdsLibraries(opdsLibraryManager.getAllLibraries());
 
-        setShowOPDSLibraryView(true);
+        // Navigate to the shelf view directly
+        setCurrentView('shelf');
     } catch (error) {
       console.error('Failed to create OPDS library:', error);
       eventDispatcher.dispatch('toast', {
@@ -666,20 +671,40 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     try {
       setOpdsUrl(library.url);
       setOpdsCredentials(library.credentials);
-      
+      setCurrentLibrary(library);
+
       // Get the shelf for this library
       const shelf = opdsLibraryManager.getShelfByLibraryId(library.id);
       if (shelf) {
         setCurrentShelfId(shelf.id);
-        setShowOPDSShelfView(true);
+        setCurrentView('shelf');
       } else {
-        // If no shelf exists, show the library view
+        // If no shelf exists, show the library view as modal for setup
         setShowOPDSLibraryView(true);
       }
     } catch (error) {
       console.error('Failed to open OPDS library:', error);
       eventDispatcher.dispatch('toast', {
         message: '打开OPDS图书馆失败',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleDeleteOPDSLibrary = async (library: OPDSLibrary) => {
+    try {
+      opdsLibraryManager.deleteLibrary(library.id);
+      // Update the OPDS libraries list
+      setOpdsLibraries(opdsLibraryManager.getAllLibraries());
+      eventDispatcher.dispatch('toast', {
+        message: `已删除OPDS书库: ${library.name}`,
+        type: 'info',
+        timeout: 3000,
+      });
+    } catch (error) {
+      console.error('Failed to delete OPDS library:', error);
+      eventDispatcher.dispatch('toast', {
+        message: '删除OPDS书库失败',
         type: 'error',
       });
     }
@@ -776,7 +801,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           <Spinner loading />
         </div>
       )}
-      {showBookshelf &&
+      {currentView === 'home' && showBookshelf &&
         (libraryBooks.some((book) => !book.deletedAt) ? (
           <OverlayScrollbarsComponent
             defer
@@ -817,6 +842,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 booksTransferProgress={booksTransferProgress}
                 opdsLibraries={opdsLibraries}
                 onOpenOPDSLibrary={handleOpenOPDSLibrary}
+                onDeleteOPDSLibrary={handleDeleteOPDSLibrary}
               />
             </div>
           </OverlayScrollbarsComponent>
@@ -838,6 +864,40 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             </div>
           </div>
         ))}
+      {currentView === 'shelf' && currentShelfId && (
+        <div className='flex-grow flex flex-col'>
+          <div className='flex items-center gap-4 p-4 bg-base-200 border-b border-base-300'>
+            <button
+              onClick={() => setCurrentView('home')}
+              className='btn btn-ghost btn-sm'
+            >
+              ← {_('Back to Library')}
+            </button>
+            <h1 className='text-xl font-semibold'>{currentLibrary?.name || _('OPDS Library')}</h1>
+          </div>
+          <OverlayScrollbarsComponent
+            defer
+            aria-label=''
+            className='flex-grow'
+            options={{ scrollbars: { autoHide: 'scroll' } }}
+          >
+            <div
+              className='scroll-container flex-grow p-4'
+              style={{
+                paddingTop: '16px',
+                paddingRight: `${insets.right + 16}px`,
+                paddingBottom: `${insets.bottom + 16}px`,
+                paddingLeft: `${insets.left + 16}px`,
+              }}
+            >
+              <OPDSShelfMainView
+                shelfId={currentShelfId}
+                onBookDownload={handleOPDSBookDownload}
+              />
+            </div>
+          </OverlayScrollbarsComponent>
+        </div>
+      )}
       {showDetailsBook && (
         <BookDetailModal
           isOpen={!!showDetailsBook}
@@ -873,7 +933,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         onClose={() => {
           setShowOPDSLibraryView(false);
           if (currentShelfId) {
-            setShowOPDSShelfView(true);
+            setCurrentView('shelf');
           }
         }}
         onBookDownload={handleOPDSBookDownload}

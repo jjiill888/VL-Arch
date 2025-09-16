@@ -7,6 +7,7 @@ import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isTauriAppPlatform } from '@/services/environment';
 import { navigateToLibrary, showLibraryWindow } from '@/utils/nav';
+import { isTauriAvailable } from '@/utils/tauriHelpers';
 
 interface SingleInstancePayload {
   args: string[];
@@ -40,6 +41,13 @@ export function useOpenWithBooks() {
   useEffect(() => {
     if (!isTauriAppPlatform() || !appService) return;
     if (listenedOpenWithBooks.current) return;
+
+    // Check if Tauri window APIs are available
+    if (!isTauriAvailable()) {
+      console.debug('Tauri internals not available, skipping open with books setup');
+      return;
+    }
+
     listenedOpenWithBooks.current = true;
 
     const unlistenDeeplink = getCurrentWindow().listen('single-instance', ({ event, payload }) => {

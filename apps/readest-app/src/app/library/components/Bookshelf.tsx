@@ -39,6 +39,7 @@ interface BookshelfProps {
   booksTransferProgress: { [key: string]: number | null };
   opdsLibraries?: OPDSLibrary[];
   onOpenOPDSLibrary?: (library: OPDSLibrary) => void;
+  onDeleteOPDSLibrary?: (library: OPDSLibrary) => void;
 }
 
 const Bookshelf: React.FC<BookshelfProps> = ({
@@ -55,6 +56,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   booksTransferProgress,
   opdsLibraries = [],
   onOpenOPDSLibrary,
+  onDeleteOPDSLibrary,
 }) => {
   const _ = useTranslation();
   const router = useRouter();
@@ -67,6 +69,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   const [bookIdsToDelete, setBookIdsToDelete] = useState<string[]>([]);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [showGroupingModal, setShowGroupingModal] = useState(false);
+  const [showOPDSDeleteAlert, setShowOPDSDeleteAlert] = useState(false);
+  const [opdsLibraryToDelete, setOpdsLibraryToDelete] = useState<OPDSLibrary | null>(null);
   const [queryTerm, setQueryTerm] = useState<string | null>(null);
   const [navBooksGroup, setNavBooksGroup] = useState<BooksGroup | null>(null);
   const [importBookUrl] = useState(searchParams?.get('url') || '');
@@ -312,6 +316,19 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSelectMode, isSelectAll, isSelectNone]);
 
+  const handleDeleteOPDSLibraryConfirm = useCallback(async () => {
+    if (opdsLibraryToDelete && onDeleteOPDSLibrary) {
+      await onDeleteOPDSLibrary(opdsLibraryToDelete);
+      setOpdsLibraryToDelete(null);
+      setShowOPDSDeleteAlert(false);
+    }
+  }, [opdsLibraryToDelete, onDeleteOPDSLibrary]);
+
+  const handleDeleteOPDSLibraryIntent = useCallback((library: OPDSLibrary) => {
+    setOpdsLibraryToDelete(library);
+    setShowOPDSDeleteAlert(true);
+  }, []);
+
   useEffect(() => {
     eventDispatcher.on('delete-books', handleDeleteBooksIntent);
     return () => {
@@ -323,55 +340,66 @@ const Bookshelf: React.FC<BookshelfProps> = ({
 
   return (
     <div className='bookshelf'>
-      {/* OPDS Libraries Section */}
       {opdsLibraries.length > 0 && (
         <div className='mb-6 px-4'>
-          <h2 className='mb-4 text-lg font-semibold text-base-content'>{_('OPDS 书库')}</h2>
+          <h2 className='mb-4 text-lg font-semibold text-base-content'>OPDS Libraries</h2>
           <div className={clsx(
             'grid gap-4',
             viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6' : 'grid-cols-1'
           )}>
             {opdsLibraries.map((library) => (
-              <button
+              <div
                 key={library.id}
                 className={clsx(
-                  'bg-base-100 border border-base-300 rounded-lg p-4 cursor-pointer hover:bg-base-200 transition-colors text-left',
-                  viewMode === 'list' && 'flex items-center gap-4'
+                  'bg-base-100 border border-base-300 rounded-lg relative group hover:bg-base-200 transition-colors',
+                  viewMode === 'list' && 'flex items-center'
                 )}
-                onClick={() => onOpenOPDSLibrary?.(library)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onOpenOPDSLibrary?.(library);
-                  }
-                }}
-                aria-label={`打开 ${library.name} 书库`}
               >
-                {viewMode === 'list' ? (
-                  <>
-                    <div className='w-12 h-16 bg-primary/20 rounded flex items-center justify-center'>
-                      <span className='text-primary font-bold text-lg'>📚</span>
-                    </div>
-                    <div className='flex-1'>
-                      <h3 className='font-semibold text-base-content'>{library.name}</h3>
-                      <p className='text-sm text-base-content/70'>{library.description || library.url}</p>
-                      <p className='text-xs text-base-content/50'>
-                        {_('最后更新')}: {new Date(library.lastUpdated).toLocaleDateString()}
+                <button
+                  className="absolute top-2 right-2 p-1 rounded-full bg-error text-error-content opacity-0 group-hover:opacity-100 transition-opacity hover:bg-error/80 z-10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteOPDSLibraryIntent(library);
+                  }}
+                  aria-label={`Delete ${library.name} library`}
+                  title={`Delete ${library.name}`}
+                >
+                  <MdDelete size={16} />
+                </button>
+                <button
+                  className={clsx(
+                    'w-full p-4 cursor-pointer text-left',
+                    viewMode === 'list' && 'flex items-center gap-4'
+                  )}
+                  onClick={() => onOpenOPDSLibrary?.(library)}
+                  aria-label={`Open ${library.name} library`}
+                >
+                  {viewMode === 'list' ? (
+                    <>
+                      <div className='w-12 h-16 bg-primary/20 rounded flex items-center justify-center'>
+                        <span className='text-primary font-bold text-lg'>📚</span>
+                      </div>
+                      <div className='flex-1'>
+                        <h3 className='font-semibold text-base-content'>{library.name}</h3>
+                        <p className='text-sm text-base-content/70'>{library.description || library.url}</p>
+                        <p className='text-xs text-base-content/50'>
+                          Last updated: {new Date(library.lastUpdated).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className='text-center'>
+                      <div className='w-full h-20 bg-primary/20 rounded flex items-center justify-center mb-2'>
+                        <span className='text-primary font-bold text-2xl'>📚</span>
+                      </div>
+                      <h3 className='font-semibold text-sm text-base-content truncate'>{library.name}</h3>
+                      <p className='text-xs text-base-content/70 mt-1'>
+                        {library.books.length} books
                       </p>
                     </div>
-                  </>
-                ) : (
-                  <div className='text-center'>
-                    <div className='w-full h-20 bg-primary/20 rounded flex items-center justify-center mb-2'>
-                      <span className='text-primary font-bold text-2xl'>📚</span>
-                    </div>
-                    <h3 className='font-semibold text-sm text-base-content truncate'>{library.name}</h3>
-                    <p className='text-xs text-base-content/70 mt-1'>
-                      {library.books.length} {_('本书')}
-                    </p>
-                  </div>
-                )}
-              </button>
+                  )}
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -528,6 +556,26 @@ const Bookshelf: React.FC<BookshelfProps> = ({
               setShowSelectModeActions(true);
             }}
             onConfirm={confirmDelete}
+          />
+        </div>
+      )}
+      {showOPDSDeleteAlert && opdsLibraryToDelete && (
+        <div
+          className={clsx('fixed bottom-0 left-0 right-0 z-50 flex justify-center')}
+          style={{
+            paddingBottom: `${(safeAreaInsets?.bottom || 0) + 16}px`,
+          }}
+        >
+          <Alert
+            title={_('Confirm Deletion')}
+            message={_('Are you sure you want to delete the OPDS library "{{name}}"? This will also remove any downloaded books from this library.', {
+              name: opdsLibraryToDelete.name,
+            })}
+            onCancel={() => {
+              setShowOPDSDeleteAlert(false);
+              setOpdsLibraryToDelete(null);
+            }}
+            onConfirm={handleDeleteOPDSLibraryConfirm}
           />
         </div>
       )}

@@ -7,6 +7,39 @@ import {
   OPDSLinkRel,
   OPDSMimeType,
 } from './types';
+import { getFeed, SYMBOL } from 'foliate-js/opds.js';
+
+// Type definitions for foliate-js OPDS structures
+interface FoliatePublication {
+  metadata: {
+    title?: string;
+    author?: Array<{ name: string }>;
+    publisher?: string;
+    published?: string;
+    language?: string;
+    identifier?: string;
+    subject?: Array<{ name?: string; code?: string }>;
+    [key: symbol]: unknown;
+  };
+  links: Array<{ rel: string | string[]; type: string; href: string; title?: string }>;
+}
+
+interface FoliateNavigation {
+  title: string;
+  href: string;
+  type?: string;
+  [key: symbol]: unknown;
+}
+
+interface FoliateFeed {
+  metadata: {
+    title?: string;
+    subtitle?: string;
+  };
+  links?: Array<{ rel: string | string[]; type: string; href: string; title?: string }>;
+  publications?: FoliatePublication[];
+  navigation?: FoliateNavigation[];
+}
 
 export class OPDSParser {
   private getTextContent(element: Element | null): string {
@@ -133,6 +166,52 @@ export class OPDSParser {
       throw new Error('无效的OPDS feed: 未找到feed元素');
     }
 
+    try {
+      // Use foliate-js OPDS parser
+      const foliateData = getFeed(doc) as FoliateFeed;
+
+      // Convert foliate-js format to our internal format
+      const entries: OPDSEntry[] = [];
+
+      // Handle publications (books)
+      if (foliateData.publications) {
+        foliateData.publications.forEach((pub: FoliatePublication) => {
+          entries.push(this.convertFoliatePublicationToEntry(pub));
+        });
+      }
+
+      // Handle navigation items
+      if (foliateData.navigation) {
+        foliateData.navigation.forEach((nav: FoliateNavigation) => {
+          entries.push(this.convertFoliateNavigationToEntry(nav));
+        });
+      }
+
+      return {
+        id: this.getTextContent(feed.querySelector('id')),
+        title: foliateData.metadata?.title || '',
+        subtitle: foliateData.metadata?.subtitle,
+        updated: this.getTextContent(feed.querySelector('updated')),
+        links: foliateData.links?.map((link) => ({
+          rel: Array.isArray(link.rel) ? link.rel.join(' ') : link.rel || '',
+          type: link.type || '',
+          href: link.href || '',
+          title: link.title,
+        })) || [],
+        entries,
+      };
+    } catch (error) {
+      console.warn('Failed to use foliate-js parser, falling back to custom parser:', error);
+      // Fallback to original implementation
+      return this.parseFeedFallback(xmlText);
+    }
+  }
+
+  private parseFeedFallback(xmlText: string): OPDSFeed {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'text/xml');
+    const feed = doc.querySelector('feed')!;
+
     const id = this.getTextContent(feed.querySelector('id'));
     const title = this.getTextContent(feed.querySelector('title'));
     const subtitle = this.getTextContent(feed.querySelector('subtitle'));
@@ -237,6 +316,51 @@ export class OPDSParser {
       href: navigationLink?.href || entry.links[0]?.href || '',
       type: isAcquisition ? 'acquisition' : 'navigation',
       summary: entry.summary || entry.content,
+    };
+  }
+
+  private convertFoliatePublicationToEntry(pub: FoliatePublication): OPDSEntry {
+    const links: OPDSFeedLink[] = pub.links?.map((link) => ({
+      rel: Array.isArray(link.rel) ? link.rel.join(' ') : link.rel || '',
+      type: link.type || '',
+      href: link.href || '',
+      title: link.title,
+    })) || [];
+
+    return {
+      id: pub.metadata?.identifier || '',
+      title: pub.metadata?.title || '',
+      authors: pub.metadata?.author?.map((author) => author.name).filter(Boolean) || [],
+      summary: (pub.metadata?.[SYMBOL.CONTENT] as { value?: string })?.value || (pub.metadata as { [key: symbol]: string })?.[SYMBOL.SUMMARY] || '',
+      content: (pub.metadata?.[SYMBOL.CONTENT] as { value?: string })?.value,
+      published: pub.metadata?.published,
+      updated: '',
+      links,
+      categories: pub.metadata?.subject?.map((subj) => ({
+        term: subj.code || subj.name || '',
+        label: subj.name,
+      })) || [],
+      dcterms: {
+        language: pub.metadata?.language,
+        publisher: pub.metadata?.publisher,
+        issued: pub.metadata?.published,
+      },
+    };
+  }
+
+  private convertFoliateNavigationToEntry(nav: FoliateNavigation): OPDSEntry {
+    return {
+      id: nav.href || '',
+      title: nav.title || '',
+      authors: [],
+      summary: (nav as { [key: symbol]: string })[SYMBOL.SUMMARY] || '',
+      links: [{
+        rel: 'subsection',
+        type: nav.type || '',
+        href: nav.href || '',
+        title: nav.title,
+      }],
+      categories: [],
     };
   }
 }

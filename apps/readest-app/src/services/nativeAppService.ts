@@ -35,6 +35,7 @@ import { NativeFile, RemoteFile } from '@/utils/file';
 
 import { BaseAppService, ResolvedPath } from './appService';
 import { LOCAL_BOOKS_SUBDIR, LOCAL_FONTS_SUBDIR } from './constants';
+import { isTauriAvailable } from '@/utils/tauriHelpers';
 
 declare global {
   interface Window {
@@ -43,7 +44,24 @@ declare global {
   }
 }
 
-const OS_TYPE = osType();
+// Initialize OS_TYPE with fallback, then update when Tauri is ready
+let OS_TYPE = getOSPlatform(); // Start with browser-based detection
+
+// Initialize the proper OS type when Tauri is available
+const initializeOSType = async () => {
+  try {
+    if (typeof window !== 'undefined' && window.__TAURI_OS_PLUGIN_INTERNALS__) {
+      OS_TYPE = await osType();
+    }
+  } catch {
+    console.debug('Tauri OS plugin not available, using fallback detection');
+  }
+};
+
+// Try to initialize when the module loads (non-blocking)
+if (typeof window !== 'undefined') {
+  setTimeout(initializeOSType, 0);
+}
 
 // Usage:
 // 1. baseDir + fp
@@ -90,14 +108,27 @@ const resolvePath = (path: string, base: BaseDir): ResolvedPath => {
   }
 };
 
+
 export const nativeFileSystem: FileSystem = {
   async getPrefix(base: BaseDir) {
+    if (!isTauriAvailable()) {
+      // Return a fallback path when Tauri is not ready
+      console.debug('Tauri not available, using fallback path for base:', base);
+      return `/tmp/readest-fallback/${base.toLowerCase()}`;
+    }
     const { basePrefix, fp } = resolvePath('', base);
     const basePath = await basePrefix();
     return fp ? await join(basePath, fp) : basePath;
   },
   getURL(path: string) {
-    return isValidURL(path) ? path : convertFileSrc(path);
+    if (isValidURL(path)) {
+      return path;
+    }
+    if (!isTauriAvailable()) {
+      console.debug('Tauri not available, returning path as-is:', path);
+      return path;
+    }
+    return convertFileSrc(path);
   },
   async getBlobURL(path: string, base: BaseDir) {
     const content = await this.readFile(path, base, 'binary');
@@ -160,6 +191,10 @@ export const nativeFileSystem: FileSystem = {
     }
   },
   async readFile(path: string, base: BaseDir, mode: 'text' | 'binary') {
+    if (!isTauriAvailable()) {
+      console.debug('Tauri not available, returning empty content for file read:', path);
+      return mode === 'text' ? '' : new ArrayBuffer(0);
+    }
     const { fp, baseDir } = resolvePath(path, base);
 
     return mode === 'text'
@@ -169,6 +204,10 @@ export const nativeFileSystem: FileSystem = {
   async writeFile(path: string, base: BaseDir, content: string | ArrayBuffer | File) {
     // NOTE: this could be very slow for large files and might block the UI thread
     // so do not use this for large files
+    if (!isTauriAvailable()) {
+      console.debug('Tauri not available, skipping file write for:', path);
+      return;
+    }
     const { fp, baseDir } = resolvePath(path, base);
 
     if (typeof content === 'string') {
@@ -199,16 +238,28 @@ export const nativeFileSystem: FileSystem = {
     return remove(fp, base && { baseDir });
   },
   async createDir(path: string, base: BaseDir, recursive = false) {
+    if (!isTauriAvailable()) {
+      console.debug('Tauri not available, skipping directory creation for:', path);
+      return;
+    }
     const { fp, baseDir } = resolvePath(path, base);
 
     await mkdir(fp, base && { baseDir, recursive });
   },
   async removeDir(path: string, base: BaseDir, recursive = false) {
+    if (!isTauriAvailable()) {
+      console.debug('Tauri not available, skipping directory removal for:', path);
+      return;
+    }
     const { fp, baseDir } = resolvePath(path, base);
 
     await remove(fp, base && { baseDir, recursive });
   },
   async readDir(path: string, base: BaseDir) {
+    if (!isTauriAvailable()) {
+      console.debug('Tauri not available, returning empty directory listing for:', path);
+      return [];
+    }
     const { fp, baseDir } = resolvePath(path, base);
 
     const list = await readDir(fp, base && { baseDir });
@@ -256,6 +307,30 @@ export class NativeAppService extends BaseAppService {
   override hasOrientationLock =
     (OS_TYPE === 'ios' && getOSPlatform() === 'ios') || OS_TYPE === 'android';
   override distChannel = process.env['NEXT_PUBLIC_DIST_CHANNEL'] || 'readest';
+
+  /**
+   * Initialize the service with proper OS type detection from Tauri
+   */
+  async initialize(): Promise<void> {
+    await initializeOSType();
+    // Update properties that depend on OS_TYPE
+    this.isAppDataSandbox = ['android', 'ios'].includes(OS_TYPE);
+    this.isMobile = ['android', 'ios'].includes(OS_TYPE);
+    this.isAndroidApp = OS_TYPE === 'android';
+    this.isIOSApp = OS_TYPE === 'ios';
+    this.isMacOSApp = OS_TYPE === 'macos';
+    this.isLinuxApp = OS_TYPE === 'linux';
+    this.isMobileApp = ['android', 'ios'].includes(OS_TYPE);
+    this.hasTrafficLight = OS_TYPE === 'macos';
+    this.hasWindow = !(OS_TYPE === 'ios' || OS_TYPE === 'android');
+    this.hasWindowBar = !(OS_TYPE === 'ios' || OS_TYPE === 'android');
+    this.hasContextMenu = !(OS_TYPE === 'ios' || OS_TYPE === 'android');
+    this.hasRoundedWindow = OS_TYPE === 'linux';
+    this.hasSafeAreaInset = OS_TYPE === 'ios' || OS_TYPE === 'android';
+    this.hasHaptics = OS_TYPE === 'ios' || OS_TYPE === 'android';
+    this.hasUpdater = OS_TYPE !== 'ios' && !process.env['NEXT_PUBLIC_DISABLE_UPDATER'] && !window.__READEST_UPDATER_DISABLED;
+    this.hasOrientationLock = (OS_TYPE === 'ios' && getOSPlatform() === 'ios') || OS_TYPE === 'android';
+  }
 
   override resolvePath(fp: string, base: BaseDir): ResolvedPath {
     return resolvePath(fp, base);
