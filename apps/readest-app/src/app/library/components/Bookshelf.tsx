@@ -7,6 +7,7 @@ import { LuFolderPlus } from 'react-icons/lu';
 import { PiPlus } from 'react-icons/pi';
 import { Book, BooksGroup } from '@/types/book';
 import { LibraryCoverFitType, LibraryViewModeType } from '@/types/settings';
+import { OPDSLibrary } from '@/services/opds';
 import { useEnv } from '@/context/EnvContext';
 import { useThemeStore } from '@/store/themeStore';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
@@ -36,6 +37,8 @@ interface BookshelfProps {
   handleSetSelectMode: (selectMode: boolean) => void;
   handleShowDetailsBook: (book: Book) => void;
   booksTransferProgress: { [key: string]: number | null };
+  opdsLibraries?: OPDSLibrary[];
+  onOpenOPDSLibrary?: (library: OPDSLibrary) => void;
 }
 
 const Bookshelf: React.FC<BookshelfProps> = ({
@@ -50,6 +53,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   handleSetSelectMode,
   handleShowDetailsBook,
   booksTransferProgress,
+  opdsLibraries = [],
+  onOpenOPDSLibrary,
 }) => {
   const _ = useTranslation();
   const router = useRouter();
@@ -318,6 +323,60 @@ const Bookshelf: React.FC<BookshelfProps> = ({
 
   return (
     <div className='bookshelf'>
+      {/* OPDS Libraries Section */}
+      {opdsLibraries.length > 0 && (
+        <div className='mb-6 px-4'>
+          <h2 className='mb-4 text-lg font-semibold text-base-content'>{_('OPDS 书库')}</h2>
+          <div className={clsx(
+            'grid gap-4',
+            viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6' : 'grid-cols-1'
+          )}>
+            {opdsLibraries.map((library) => (
+              <button
+                key={library.id}
+                className={clsx(
+                  'bg-base-100 border border-base-300 rounded-lg p-4 cursor-pointer hover:bg-base-200 transition-colors text-left',
+                  viewMode === 'list' && 'flex items-center gap-4'
+                )}
+                onClick={() => onOpenOPDSLibrary?.(library)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpenOPDSLibrary?.(library);
+                  }
+                }}
+                aria-label={`打开 ${library.name} 书库`}
+              >
+                {viewMode === 'list' ? (
+                  <>
+                    <div className='w-12 h-16 bg-primary/20 rounded flex items-center justify-center'>
+                      <span className='text-primary font-bold text-lg'>📚</span>
+                    </div>
+                    <div className='flex-1'>
+                      <h3 className='font-semibold text-base-content'>{library.name}</h3>
+                      <p className='text-sm text-base-content/70'>{library.description || library.url}</p>
+                      <p className='text-xs text-base-content/50'>
+                        {_('最后更新')}: {new Date(library.lastUpdated).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className='text-center'>
+                    <div className='w-full h-20 bg-primary/20 rounded flex items-center justify-center mb-2'>
+                      <span className='text-primary font-bold text-2xl'>📚</span>
+                    </div>
+                    <h3 className='font-semibold text-sm text-base-content truncate'>{library.name}</h3>
+                    <p className='text-xs text-base-content/70 mt-1'>
+                      {library.books.length} {_('本书')}
+                    </p>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div
         ref={autofocusRef}
         tabIndex={-1}

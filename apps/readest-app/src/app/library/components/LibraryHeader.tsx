@@ -27,6 +27,7 @@ interface LibraryHeaderProps {
   isSelectMode: boolean;
   isSelectAll: boolean;
   onImportBooks: () => void;
+  onImportFromOPDS?: () => void;
   onToggleSelectMode: () => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
@@ -36,6 +37,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
   isSelectMode,
   isSelectAll,
   onImportBooks,
+  onImportFromOPDS,
   onToggleSelectMode,
   onSelectAll,
   onDeselectAll,
@@ -180,7 +182,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
               buttonClassName='p-0 h-6 min-h-6 w-6 flex items-center justify-center'
               toggleButton={<PiPlus role='none' className='m-0.5 h-5 w-5' />}
             >
-              <ImportMenu onImportBooks={onImportBooks} />
+              <ImportMenu onImportBooks={onImportBooks} onImportFromOPDS={onImportFromOPDS} />
             </Dropdown>
             {appService?.isMobile ? null : (
               <button

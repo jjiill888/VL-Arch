@@ -37,6 +37,7 @@ import { useScreenWakeLock } from '@/hooks/useScreenWakeLock';
 import { useOpenWithBooks } from '@/hooks/useOpenWithBooks';
 import { SelectedFile, useFileSelector } from '@/hooks/useFileSelector';
 import { lockScreenOrientation } from '@/utils/bridge';
+import { OPDSService, OPDSBook, opdsLibraryManager, OPDSLibrary } from '@/services/opds';
 import {
   tauriHandleSetAlwaysOnTop,
   tauriHandleToggleFullScreen,
@@ -53,6 +54,10 @@ import LibraryHeader from './components/LibraryHeader';
 import Bookshelf from './components/Bookshelf';
 import useShortcuts from '@/hooks/useShortcuts';
 import DropIndicator from '@/components/DropIndicator';
+import OPDSUrlDialog from '@/components/OPDSUrlDialog';
+import OPDSCredentialsDialog from '@/components/OPDSCredentialsDialog';
+import OPDSLibraryView from '@/components/OPDSLibraryView';
+import OPDSShelfView from '@/components/OPDSShelfView';
 
 const LibraryPageWithSearchParams = () => {
   const searchParams = useSearchParams();
@@ -88,6 +93,14 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   }>({});
   const [pendingNavigationBookIds, setPendingNavigationBookIds] = useState<string[] | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showOPDSUrlDialog, setShowOPDSUrlDialog] = useState(false);
+  const [showOPDSCredentialsDialog, setShowOPDSCredentialsDialog] = useState(false);
+  const [showOPDSLibraryView, setShowOPDSLibraryView] = useState(false);
+  const [showOPDSShelfView, setShowOPDSShelfView] = useState(false);
+  const [opdsUrl, setOpdsUrl] = useState('');
+  const [opdsCredentials, setOpdsCredentials] = useState<{ username: string; password: string } | undefined>();
+  const [currentShelfId, setCurrentShelfId] = useState<string>('');
+  const [opdsLibraries, setOpdsLibraries] = useState<OPDSLibrary[]>([]);
   const demoBooks = useDemoBooks();
   const osRef = useRef<OverlayScrollbarsComponentRef>(null);
   const containerRef: React.MutableRefObject<HTMLDivElement | null> = useRef(null);
@@ -260,6 +273,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryBooks]);
+
+  // Load OPDS libraries on component mount
+  useEffect(() => {
+    const libraries = opdsLibraryManager.getAllLibraries();
+    setOpdsLibraries(libraries);
+  }, []);
 
   const processOpenWithFiles = React.useCallback(
     async (appService: AppService, openWithFiles: string[], libraryBooks: Book[]) => {
@@ -595,6 +614,108 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     });
   };
 
+  const handleImportFromOPDS = async () => {
+    setIsSelectMode(false);
+    console.log('Starting OPDS import flow...');
+    setShowOPDSUrlDialog(true);
+  };
+
+  const handleOPDSUrlSubmit = (url: string) => {
+    setOpdsUrl(url);
+    setShowOPDSCredentialsDialog(true);
+  };
+
+  const handleOPDSCredentialsSubmit = async (username: string, password: string) => {
+    setShowOPDSCredentialsDialog(false);
+    setOpdsCredentials({ username, password });
+    
+    // Create OPDS library and shelf
+    try {
+      const opdsService = new OPDSService();
+      const feed = await opdsService.fetchFeed(opdsUrl, { username, password });
+      const books = opdsService.getBooks(feed);
+      
+      // Create library
+      const library = opdsLibraryManager.createLibrary(feed, opdsUrl, { username, password });
+      opdsLibraryManager.updateLibraryBooks(library.id, books);
+      
+        // Create shelf
+        const shelf = opdsLibraryManager.createShelf(library.id, library.name);
+        setCurrentShelfId(shelf.id);
+
+        // Update OPDS libraries list
+        setOpdsLibraries(opdsLibraryManager.getAllLibraries());
+
+        setShowOPDSLibraryView(true);
+    } catch (error) {
+      console.error('Failed to create OPDS library:', error);
+      eventDispatcher.dispatch('toast', {
+        message: '创建OPDS图书馆失败',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleTryOPDSWithoutAuth = async () => {
+    setShowOPDSCredentialsDialog(false);
+    setOpdsCredentials(undefined);
+    setShowOPDSLibraryView(true);
+  };
+
+  const handleOpenOPDSLibrary = async (library: OPDSLibrary) => {
+    try {
+      setOpdsUrl(library.url);
+      setOpdsCredentials(library.credentials);
+      
+      // Get the shelf for this library
+      const shelf = opdsLibraryManager.getShelfByLibraryId(library.id);
+      if (shelf) {
+        setCurrentShelfId(shelf.id);
+        setShowOPDSShelfView(true);
+      } else {
+        // If no shelf exists, show the library view
+        setShowOPDSLibraryView(true);
+      }
+    } catch (error) {
+      console.error('Failed to open OPDS library:', error);
+      eventDispatcher.dispatch('toast', {
+        message: '打开OPDS图书馆失败',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleOPDSBookDownload = async (book: OPDSBook) => {
+    console.log('Downloading OPDS book:', book.title);
+    const opdsService = new OPDSService();
+
+    try {
+      // Download the book file
+      const arrayBuffer = await opdsService.downloadBook(book, opdsCredentials);
+
+      // Create a temporary file-like object
+      const blob = new Blob([arrayBuffer]);
+      const file = new File([blob], `${book.title}.epub`, { type: 'application/epub+zip' });
+
+      // Import the book using the existing import functionality
+      await importBooks([{ file }]);
+
+      // Add to OPDS shelf if we have a current shelf
+      if (currentShelfId) {
+        const { library } = useLibraryStore.getState();
+        const downloadedBook = library.find(b => b.title === book.title);
+        if (downloadedBook) {
+          opdsLibraryManager.addDownloadedBook(currentShelfId, downloadedBook);
+        }
+      }
+
+      console.log('OPDS book imported successfully:', book.title);
+    } catch (error) {
+      console.error('Failed to download OPDS book:', error);
+      throw error;
+    }
+  };
+
   const handleSetSelectMode = (selectMode: boolean) => {
     if (selectMode && appService?.hasHaptics) {
       impactFeedback('medium');
@@ -644,6 +765,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           isSelectMode={isSelectMode}
           isSelectAll={isSelectAll}
           onImportBooks={handleImportBooks}
+          onImportFromOPDS={handleImportFromOPDS}
           onToggleSelectMode={() => handleSetSelectMode(!isSelectMode)}
           onSelectAll={handleSelectAll}
           onDeselectAll={handleDeselectAll}
@@ -693,6 +815,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 handleSetSelectMode={handleSetSelectMode}
                 handleShowDetailsBook={handleShowDetailsBook}
                 booksTransferProgress={booksTransferProgress}
+                opdsLibraries={opdsLibraries}
+                onOpenOPDSLibrary={handleOpenOPDSLibrary}
               />
             </div>
           </OverlayScrollbarsComponent>
@@ -730,6 +854,36 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       <AboutWindow />
       <UpdaterWindow />
       <Toast />
+      <OPDSUrlDialog
+        isOpen={showOPDSUrlDialog}
+        onClose={() => setShowOPDSUrlDialog(false)}
+        onSubmit={handleOPDSUrlSubmit}
+      />
+      <OPDSCredentialsDialog
+        isOpen={showOPDSCredentialsDialog}
+        url={opdsUrl}
+        onClose={() => setShowOPDSCredentialsDialog(false)}
+        onSubmit={handleOPDSCredentialsSubmit}
+        onTryWithoutAuth={handleTryOPDSWithoutAuth}
+      />
+      <OPDSLibraryView
+        isOpen={showOPDSLibraryView}
+        initialUrl={opdsUrl}
+        credentials={opdsCredentials}
+        onClose={() => {
+          setShowOPDSLibraryView(false);
+          if (currentShelfId) {
+            setShowOPDSShelfView(true);
+          }
+        }}
+        onBookDownload={handleOPDSBookDownload}
+      />
+      <OPDSShelfView
+        isOpen={showOPDSShelfView}
+        shelfId={currentShelfId}
+        onClose={() => setShowOPDSShelfView(false)}
+        onBookDownload={handleOPDSBookDownload}
+      />
     </div>
   );
 };

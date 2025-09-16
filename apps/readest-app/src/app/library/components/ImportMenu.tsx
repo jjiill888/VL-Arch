@@ -7,14 +7,20 @@ import Menu from '@/components/Menu';
 interface ImportMenuProps {
   setIsDropdownOpen?: (open: boolean) => void;
   onImportBooks: () => void;
+  onImportFromOPDS?: () => void;
 }
 
-const ImportMenu: React.FC<ImportMenuProps> = ({ setIsDropdownOpen, onImportBooks }) => {
+const ImportMenu: React.FC<ImportMenuProps> = ({ setIsDropdownOpen, onImportBooks, onImportFromOPDS }) => {
   const _ = useTranslation();
   const { appService } = useEnv();
 
   const handleImportBooks = () => {
     onImportBooks();
+    setIsDropdownOpen?.(false);
+  };
+
+  const handleImportFromOPDS = () => {
+    onImportFromOPDS?.();
     setIsDropdownOpen?.(false);
   };
 
@@ -27,6 +33,7 @@ const ImportMenu: React.FC<ImportMenuProps> = ({ setIsDropdownOpen, onImportBook
       )}
     >
       <MenuItem label={_('From Local File')} onClick={handleImportBooks} />
+      <MenuItem label={_('From OPDS')} onClick={handleImportFromOPDS} />
     </Menu>
   );
 };
