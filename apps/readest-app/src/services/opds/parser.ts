@@ -76,16 +76,34 @@ export class OPDSParser {
   private extractNextLink(doc: Document): string | undefined {
     console.log('🔍 Starting nextLink extraction...');
 
+    // Debug: Log the raw XML structure first
+    const feedElement = doc.querySelector('feed');
+    if (feedElement) {
+      console.log('🔍 Feed element found, checking for link elements...');
+      
+      // Log all direct child link elements
+      const directLinks = feedElement.querySelectorAll(':scope > link');
+      console.log('🔍 Direct child links:', Array.from(directLinks).map(link => ({
+        rel: link.getAttribute('rel'),
+        href: link.getAttribute('href'),
+        type: link.getAttribute('type'),
+        title: link.getAttribute('title'),
+        outerHTML: link.outerHTML
+      })));
+    }
+
     // Debug: Log all links in the feed to see what we have
     const allFeedLinks = doc.querySelectorAll('feed link, feed > link');
     console.log('🔍 All feed links found:', Array.from(allFeedLinks).map(link => ({
       rel: link.getAttribute('rel'),
       href: link.getAttribute('href'),
+      type: link.getAttribute('type'),
       title: link.getAttribute('title'),
-      tagName: link.tagName
+      tagName: link.tagName,
+      outerHTML: link.outerHTML
     })));
 
-    // Method 1: Direct CSS selector
+    // Method 1: Direct CSS selector for exact match
     const nextLinkElement = doc.querySelector('feed > link[rel="next"]');
     if (nextLinkElement) {
       const href = nextLinkElement.getAttribute('href');
@@ -93,29 +111,74 @@ export class OPDSParser {
       return href || undefined;
     }
 
-    // Method 2: Case-insensitive search through all feed links
+    // Method 2: Search for rel="next" in all feed links (case-insensitive)
     const feedLinks = doc.querySelectorAll('feed link, feed > link');
     for (const link of Array.from(feedLinks)) {
-      const rel = link.getAttribute('rel')?.toLowerCase();
+      const rel = link.getAttribute('rel');
       const href = link.getAttribute('href');
-      if (rel === 'next' && href) {
-        console.log('🔗 Found nextLink via case-insensitive search:', href);
+      
+      console.log('🔍 Checking link:', { rel, href });
+      
+      // Check for exact match or space-separated values containing "next"
+      if (href && rel && (
+        rel === 'next' || 
+        rel.toLowerCase() === 'next' ||
+        rel.split(/\s+/).some(r => r.toLowerCase() === 'next')
+      )) {
+        console.log('🔗 Found nextLink via feed links search:', href);
         return href;
       }
     }
 
-    // Method 3: Search in any namespace
+    // Method 3: Search in any link element (broader search)
     const allLinks = doc.querySelectorAll('link');
+    console.log('🔍 Checking all link elements in document:', allLinks.length);
     for (const link of Array.from(allLinks)) {
-      const rel = link.getAttribute('rel')?.toLowerCase();
+      const rel = link.getAttribute('rel');
       const href = link.getAttribute('href');
-      if (rel === 'next' && href) {
+      
+      if (href && rel && (
+        rel === 'next' || 
+        rel.toLowerCase() === 'next' ||
+        rel.split(/\s+/).some(r => r.toLowerCase() === 'next')
+      )) {
         console.log('🔗 Found nextLink via global search:', href);
         return href;
       }
     }
 
+    // Method 4: Check if foliate-js already found it in the parsed links
+    try {
+      const foliateData = getFeed(doc) as FoliateFeed;
+      console.log('🔍 Foliate-js parsed links:', foliateData.links?.map(link => ({
+        rel: link.rel,
+        href: link.href,
+        type: link.type
+      })));
+      
+      const nextLink = foliateData.links?.find(link => {
+        const rel = Array.isArray(link.rel) ? link.rel : [link.rel];
+        return rel.some(r => r.toLowerCase() === 'next');
+      });
+      
+      if (nextLink?.href) {
+        console.log('🔗 Found nextLink via foliate-js:', nextLink.href);
+        return nextLink.href;
+      }
+    } catch (error) {
+      console.log('🔍 Foliate-js not available for nextLink extraction:', error);
+    }
+
+    // Method 5: Raw XML search as last resort
+    const rawXML = new XMLSerializer().serializeToString(doc);
+    const nextLinkMatch = rawXML.match(/<link[^>]*rel=["']next["'][^>]*href=["']([^"']+)["'][^>]*>/i);
+    if (nextLinkMatch) {
+      console.log('🔗 Found nextLink via raw XML search:', nextLinkMatch[1]);
+      return nextLinkMatch[1];
+    }
+
     console.log('❌ No nextLink found in feed after exhaustive search');
+    console.log('🔍 Raw XML sample (first 2000 chars):', rawXML.substring(0, 2000));
     return undefined;
   }
 

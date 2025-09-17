@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MdDownload, MdInfo, MdRefresh, MdBook, MdBookmark } from 'react-icons/md';
+import { MdDownload, MdInfo, MdRefresh, MdBook, MdBookmark, MdViewList, MdGridView } from 'react-icons/md';
 import { useTranslation } from '@/hooks/useTranslation';
 import { eventDispatcher } from '@/utils/event';
 import Dialog from './Dialog';
@@ -44,6 +44,11 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
   const [error, setError] = useState<string>('');
   const [downloadProgress, setDownloadProgress] = useState<Map<string, DownloadProgress>>(new Map());
   const [loadingMore, setLoadingMore] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  
+  // Scroll preview state
+  const [isScrollPreviewMode, setIsScrollPreviewMode] = useState(false);
+  const [previewPosition, setPreviewPosition] = useState(0);
 
   const loadShelfData = useCallback(async () => {
     const shelfData = opdsLibraryManager.getShelf(shelfId);
@@ -355,6 +360,55 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
+  // Scroll preview functions
+  const handleScrollPreview = (event: React.WheelEvent) => {
+    if (!isScrollPreviewMode || !library) return;
+    
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const delta = event.deltaY;
+    const scrollSpeed = 0.05; // Reduced scroll sensitivity for better control
+    const newPosition = Math.max(0, Math.min(1, previewPosition + (delta * scrollSpeed)));
+    
+    setPreviewPosition(newPosition);
+    
+    // Calculate which books to show based on preview position
+    const totalBooks = library.books.length;
+    const visibleBooks = 12; // Number of books visible at once
+    const startIndex = Math.floor((totalBooks - visibleBooks) * newPosition);
+    const endIndex = Math.min(startIndex + visibleBooks, totalBooks);
+    
+    console.log('📜 Scroll Preview:', {
+      delta,
+      newPosition: Math.round(newPosition * 100) + '%',
+      startIndex,
+      endIndex,
+      showingBooks: endIndex - startIndex,
+      totalBooks
+    });
+    
+    setAvailableBooks(library.books.slice(startIndex, endIndex));
+  };
+
+  const toggleScrollPreviewMode = () => {
+    if (!library) return;
+    
+    const newPreviewMode = !isScrollPreviewMode;
+    setIsScrollPreviewMode(newPreviewMode);
+    
+    if (newPreviewMode) {
+      // Enter preview mode - show all books
+      console.log('👁️ Entering scroll preview mode with', library.books.length, 'books');
+      setAvailableBooks(library.books);
+    } else {
+      // Exit preview mode - show first 12 books
+      console.log('🚫 Exiting scroll preview mode');
+      setAvailableBooks(library.books.slice(0, 12));
+      setPreviewPosition(0);
+    }
+  };
+
   if (!shelf || !library) {
     return null;
   }
@@ -375,14 +429,34 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
               <h2 className="text-lg font-semibold">{shelf.name}</h2>
               <p className="text-sm text-base-content/70">{library.description}</p>
             </div>
-            <button
-              onClick={handleRefresh}
-              disabled={loading}
-              className="btn btn-sm btn-ghost"
-              aria-label={_('刷新')}
-            >
-              <MdRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex items-center gap-2">
+              {/* View Mode Toggle */}
+              <div className="join">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`btn btn-sm join-item ${viewMode === 'list' ? 'btn-active' : 'btn-ghost'}`}
+                  aria-label={_('列表视图')}
+                >
+                  <MdViewList className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`btn btn-sm join-item ${viewMode === 'grid' ? 'btn-active' : 'btn-ghost'}`}
+                  aria-label={_('网格视图')}
+                >
+                  <MdGridView className="w-4 h-4" />
+                </button>
+              </div>
+
+              <button
+                onClick={handleRefresh}
+                disabled={loading}
+                className="btn btn-sm btn-ghost"
+                aria-label={_('刷新')}
+              >
+                <MdRefresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-4 text-sm text-base-content/70">
@@ -398,7 +472,7 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-hidden flex flex-col">
           {loading && (
             <div className="flex items-center justify-center py-8">
               <Spinner loading />
@@ -424,12 +498,36 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
           )}
 
           {!loading && !error && (
-            <div className="px-6 py-4 space-y-6">
-              {/* Available Books */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Header Info - Fixed */}
+              <div className="px-6 py-4 flex-shrink-0">
+                <div className="bg-info/10 border border-info/20 rounded-lg p-4 mb-4">
+                  <h3 className="text-sm font-medium text-info mb-2">📜 书籍列表滚动区域</h3>
+                  <p className="text-xs text-base-content/70">书籍数量: {availableBooks.length} | View Mode: {viewMode}</p>
+                </div>
+              </div>
+
+              {/* Available Books - Scrollable */}
               {availableBooks.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">{_('书籍')}</h3>
-                  <div className="grid gap-4">
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="px-6 flex-shrink-0">
+                    <h3 className="text-lg font-semibold mb-3">{_('书籍')}</h3>
+                  </div>
+
+                  <div 
+                    className="flex-1"
+                    onWheel={handleScrollPreview}
+                    style={{ 
+                      cursor: isScrollPreviewMode ? 'grab' : 'default',
+                      userSelect: isScrollPreviewMode ? 'none' : 'auto',
+                      overflow: isScrollPreviewMode ? 'hidden' : 'auto'
+                    }}
+                  >
+                    <div className="px-6">
+                      <div className={viewMode === 'grid'
+                        ? "grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+                        : "grid gap-4"
+                      }>
                     {availableBooks.map((book, index) => {
                       // Create stable unique key using book properties
                       const createUniqueKey = () => {
@@ -449,87 +547,136 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                       return (
                         <div
                           key={uniqueKey}
-                          className="flex gap-3 p-3 bg-base-100 border border-base-300 rounded-lg hover:bg-base-200 transition-colors"
+                          className={viewMode === 'grid'
+                            ? "flex flex-col bg-base-100 border border-base-300 rounded-lg hover:bg-base-200 transition-colors overflow-hidden"
+                            : "flex gap-3 p-3 bg-base-100 border border-base-300 rounded-lg hover:bg-base-200 transition-colors"
+                          }
                         >
-                        {/* Book Icon */}
-                        <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0">
-                          <MdBook className="w-8 h-8 text-base-content/30" />
-                        </div>
-
-                        {/* Book Details */}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium line-clamp-2 mb-1">{book.title}</h4>
-                          <p className="text-sm text-base-content/70 mb-2">
-                            {formatAuthors(book.authors)}
-                          </p>
-                          {book.summary && (
-                            <p className="text-xs text-base-content/60 line-clamp-2 mb-2">
-                              {cleanSummary(book.summary)}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-2 text-xs text-base-content/50">
-                            {book.published && <span>{new Date(book.published).getFullYear()}</span>}
-                            {book.language && <span>• {book.language}</span>}
-                            {book.categories && book.categories.length > 0 && (
-                              <span>• {book.categories[0]}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Download Button and Progress */}
-                        <div className="flex flex-col items-end gap-2">
-                          {downloadProgress.has(book.id) ? (
-                            <div className="flex flex-col items-end gap-1 min-w-[120px]">
-                              {(() => {
-                                const progress = downloadProgress.get(book.id)!;
-                                return (
-                                  <>
-                                    <div className="flex items-center gap-2">
-                                      <Spinner loading />
-                                      <span className="text-xs text-base-content/70">
-                                        {progress.status === 'downloading' && `${progress.progress}%`}
-                                        {progress.status === 'completed' && _('完成')}
-                                        {progress.status === 'error' && _('错误')}
-                                      </span>
-                                    </div>
-                                    {progress.totalSize > 0 && (
-                                      <div className="text-xs text-base-content/50">
-                                        {formatFileSize(progress.downloadedSize)} / {formatFileSize(progress.totalSize)}
-                                      </div>
-                                    )}
-                                    <div className="w-full bg-base-300 rounded-full h-1">
-                                      <div 
-                                        className="bg-primary h-1 rounded-full transition-all duration-300"
-                                        style={{ width: `${progress.progress}%` }}
-                                      />
-                                    </div>
-                                  </>
-                                );
-                              })()}
+                        {viewMode === 'grid' ? (
+                          <>
+                            {/* Grid Mode - Card Layout */}
+                            <div className="aspect-[28/41] bg-base-300 rounded-t-lg flex items-center justify-center">
+                              <MdBook className="w-12 h-12 text-base-content/30" />
                             </div>
-                          ) : (opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book)) ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="flex items-center gap-1 text-success">
-                                <MdBookmark className="w-4 h-4" />
-                                <span className="text-xs font-medium">{_('已下载')}</span>
+                            <div className="p-3 flex-1 flex flex-col">
+                              <h4 className="font-medium text-base-content text-sm line-clamp-2 mb-1">
+                                {book.title}
+                              </h4>
+                              <p className="text-xs text-base-content/70 line-clamp-1 mb-2">
+                                {formatAuthors(book.authors)}
+                              </p>
+                              <div className="flex items-center gap-1 text-xs text-base-content/50 mb-2">
+                                {book.published && <span>{new Date(book.published).getFullYear()}</span>}
+                                {book.language && <span>• {book.language}</span>}
+                              </div>
+                              {/* Grid Mode Download Section */}
+                              <div className="flex items-center justify-center gap-2">
+                                {downloadProgress.has(book.id) ? (
+                                  <div className="flex items-center gap-1">
+                                    <Spinner loading />
+                                    <span className="text-xs">{_('下载中')}</span>
+                                  </div>
+                                ) : (opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book)) ? (
+                                  <div className="flex items-center gap-1 text-success">
+                                    <MdBookmark className="w-4 h-4" />
+                                    <span className="text-xs">{_('已下载')}</span>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => handleBookDownload(book)}
+                                    className="btn btn-sm btn-primary"
+                                    aria-label={_('下载书籍')}
+                                  >
+                                    <MdDownload className="w-4 h-4" />
+                                  </button>
+                                )}
                               </div>
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => handleBookDownload(book)}
-                              className="btn btn-sm btn-primary"
-                              aria-label={_('下载书籍')}
-                            >
-                              <MdDownload className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
+                          </>
+                        ) : (
+                          <>
+                            {/* List Mode - Horizontal Layout */}
+                            <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0">
+                              <MdBook className="w-8 h-8 text-base-content/30" />
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-medium line-clamp-2 mb-1">{book.title}</h4>
+                              <p className="text-sm text-base-content/70 mb-2">
+                                {formatAuthors(book.authors)}
+                              </p>
+                              {book.summary && (
+                                <p className="text-xs text-base-content/60 line-clamp-2 mb-2">
+                                  {cleanSummary(book.summary)}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-xs text-base-content/50">
+                                {book.published && <span>{new Date(book.published).getFullYear()}</span>}
+                                {book.language && <span>• {book.language}</span>}
+                                {book.categories && book.categories.length > 0 && (
+                                  <span>• {book.categories[0]}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* List Mode Download Section */}
+                            <div className="flex flex-col items-end gap-2">
+                              {downloadProgress.has(book.id) ? (
+                                <div className="flex flex-col items-end gap-1 min-w-[120px]">
+                                  {(() => {
+                                    const progress = downloadProgress.get(book.id)!;
+                                    return (
+                                      <>
+                                        <div className="flex items-center gap-2">
+                                          <Spinner loading />
+                                          <span className="text-xs text-base-content/70">
+                                            {progress.status === 'downloading' && `${progress.progress}%`}
+                                            {progress.status === 'completed' && _('完成')}
+                                            {progress.status === 'error' && _('错误')}
+                                          </span>
+                                        </div>
+                                        {progress.totalSize > 0 && (
+                                          <div className="text-xs text-base-content/50">
+                                            {formatFileSize(progress.downloadedSize)} / {formatFileSize(progress.totalSize)}
+                                          </div>
+                                        )}
+                                        <div className="w-full bg-base-300 rounded-full h-1">
+                                          <div
+                                            className="bg-primary h-1 rounded-full transition-all duration-300"
+                                            style={{ width: `${progress.progress}%` }}
+                                          />
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              ) : (opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book)) ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="flex items-center gap-1 text-success">
+                                    <MdBookmark className="w-4 h-4" />
+                                    <span className="text-xs font-medium">{_('已下载')}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleBookDownload(book)}
+                                  className="btn btn-sm btn-primary"
+                                  aria-label={_('下载书籍')}
+                                >
+                                  <MdDownload className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
                       );
                     })}
+                      </div>
+                    </div>
                   </div>
-                  
-                  {/* Pagination Controls */}
+
+                  {/* Pagination Controls - Outside scroll area */}
                   {library && (
                     <div className="mt-4 text-center">
                       {/* Page Info */}
@@ -557,6 +704,33 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                         >
                           🔍 {_('测试分页')}
                         </button>
+                        <button
+                          onClick={toggleScrollPreviewMode}
+                          className={`btn btn-sm mr-3 ${isScrollPreviewMode ? 'btn-warning' : 'btn-info'}`}
+                          title={isScrollPreviewMode ? '退出滚动预览模式' : '进入滚动预览模式'}
+                        >
+                          {isScrollPreviewMode ? '🚫 退出预览' : '👁️ 滚动预览'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            console.log('🔍 Current State:', {
+                              isScrollPreviewMode,
+                              previewPosition,
+                              availableBooksCount: availableBooks.length,
+                              libraryBooksCount: library?.books.length,
+                              library: library?.name
+                            });
+                          }}
+                          className="btn btn-sm btn-accent"
+                          title="查看当前状态"
+                        >
+                          🔍 状态
+                        </button>
+                        {isScrollPreviewMode && (
+                          <div className="text-xs text-base-content/70 mt-2">
+                            滚动预览模式: {Math.round(previewPosition * 100)}% | 显示 {availableBooks.length} 本书
+                          </div>
+                        )}
                       </div>
                       
                       {/* Load More Button */}
@@ -600,7 +774,7 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
 
               {/* Empty State */}
               {!loading && !error && availableBooks.length === 0 && (
-                <div className="text-center py-8">
+                <div className="px-6 py-8 text-center">
                   <MdBook className="w-12 h-12 text-base-content/30 mx-auto mb-3" />
                   <p className="text-base-content/70">{_('书架为空')}</p>
                 </div>

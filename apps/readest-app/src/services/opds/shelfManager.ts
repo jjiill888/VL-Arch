@@ -136,8 +136,53 @@ export class OPDSLibraryManager {
 
       if (append) {
         // Append new books to existing ones, avoiding duplicates
-        const existingIds = new Set(library.books.map(book => book.id));
-        const newBooks = sortedBooks.filter(book => !existingIds.has(book.id));
+        // Use multiple criteria to identify duplicates since OPDS IDs might not be unique
+        const existingBooks = new Map();
+        
+        // Build a map of existing books using multiple identifiers
+        library.books.forEach(book => {
+          // Primary key: book.id
+          if (book.id) {
+            existingBooks.set(book.id, book);
+          }
+          
+          // Secondary key: acquisition href (most stable for OPDS)
+          const acquisitionHref = book.downloadLinks?.[0]?.href;
+          if (acquisitionHref) {
+            existingBooks.set(acquisitionHref, book);
+          }
+          
+          // Tertiary key: title + first author combination
+          const titleAuthorKey = `${book.title}-${book.authors?.[0] || ''}`;
+          existingBooks.set(titleAuthorKey, book);
+        });
+        
+        // Filter out duplicates from new books
+        const newBooks = sortedBooks.filter(book => {
+          // Check by ID
+          if (book.id && existingBooks.has(book.id)) {
+            console.log('📚 Skipping duplicate book by ID:', book.title);
+            return false;
+          }
+          
+          // Check by acquisition href
+          const acquisitionHref = book.downloadLinks?.[0]?.href;
+          if (acquisitionHref && existingBooks.has(acquisitionHref)) {
+            console.log('📚 Skipping duplicate book by href:', book.title);
+            return false;
+          }
+          
+          // Check by title + author
+          const titleAuthorKey = `${book.title}-${book.authors?.[0] || ''}`;
+          if (existingBooks.has(titleAuthorKey)) {
+            console.log('📚 Skipping duplicate book by title+author:', book.title);
+            return false;
+          }
+          
+          return true;
+        });
+        
+        console.log(`📚 Appending ${newBooks.length} new books (${sortedBooks.length - newBooks.length} duplicates skipped)`);
         library.books = [...library.books, ...newBooks];
       } else {
         library.books = sortedBooks;
@@ -189,12 +234,38 @@ export class OPDSLibraryManager {
     console.log('Calculating hasMore (Foliate-style):', {
       entriesCount: feed.entries.length,
       nextLink: feed.nextLink,
-      hasNextLink: !!feed.nextLink
+      hasNextLink: !!feed.nextLink,
+      totalResults: feed.opensearchTotalResults,
+      startIndex: feed.opensearchStartIndex,
+      itemsPerPage: feed.opensearchItemsPerPage
     });
 
-    // Foliate approach: simply check if there's a rel="next" link
+    // Foliate approach: primarily check if there's a rel="next" link
     // This is the standard OPDS way and what Calibre-Web provides
-    return !!feed.nextLink;
+    if (feed.nextLink) {
+      return true;
+    }
+
+    // Fallback: if we have OpenSearch metadata, use it to determine if there are more pages
+    if (feed.opensearchTotalResults && feed.opensearchStartIndex !== undefined && feed.opensearchItemsPerPage) {
+      const currentPageStart = feed.opensearchStartIndex;
+      const totalResults = feed.opensearchTotalResults;
+      const itemsPerPage = feed.opensearchItemsPerPage;
+      
+      // If we haven't reached the end based on start index and total results
+      const hasMoreByOpenSearch = (currentPageStart + itemsPerPage) < totalResults;
+      console.log('OpenSearch-based hasMore calculation:', {
+        currentPageStart,
+        totalResults,
+        itemsPerPage,
+        hasMoreByOpenSearch
+      });
+      
+      return hasMoreByOpenSearch;
+    }
+
+    // If no nextLink and no OpenSearch metadata, assume no more pages
+    return false;
   }
 
   public addDownloadedBook(shelfId: string, book: Book) {

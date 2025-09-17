@@ -63,6 +63,227 @@ export class OPDSService {
     });
 
     try {
+      // First, try to fetch the feed as-is
+      let requestUrl = url;
+      console.log('🔍 Starting fetchFeed with URL:', requestUrl);
+      let feed = await this.fetchFeedInternal(requestUrl, credentials, timeoutMs);
+      
+      console.log('🔍 Initial feed fetched:', {
+        entries: feed.entries.length,
+        links: feed.links.length,
+        title: feed.title
+      });
+      
+      // If this is a navigation feed (no books, only navigation links), 
+      // try to find and navigate to a books feed
+      console.log('🔍 About to check if feed is navigation feed...');
+      const isNav = this.isNavigationFeed(feed);
+      console.log('🔍 Navigation feed check result:', isNav);
+      
+      if (isNav) {
+        console.log('🔍 Detected navigation feed, looking for books feed...');
+        console.log('🔍 Navigation feed entries:', feed.entries.length);
+        console.log('🔍 Navigation feed links:', feed.links.map(link => ({ rel: link.rel, href: link.href })));
+        
+        // Look for common books feed links
+        const booksFeedLink = this.findBooksFeedLink(feed);
+        if (booksFeedLink) {
+          console.log('📚 Found books feed link:', booksFeedLink);
+          requestUrl = this.resolveUrl(url, booksFeedLink);
+          feed = await this.fetchFeedInternal(requestUrl, credentials, timeoutMs);
+          console.log('📚 Books feed loaded:', {
+            entries: feed.entries.length,
+            nextLink: feed.nextLink,
+            hasNextLink: !!feed.nextLink
+          });
+        } else {
+          console.log('⚠️ No books feed found in navigation feed');
+        }
+      }
+      
+      // Now load ALL books by following all nextLink pages
+      if (feed.nextLink) {
+        console.log('📚 Starting bulk loading of all books...');
+        feed = await this.loadAllBooks(feed, requestUrl, credentials, timeoutMs);
+        console.log('📚 Bulk loading completed:', {
+          totalEntries: feed.entries.length,
+          hasNextLink: !!feed.nextLink
+        });
+      }
+      
+      return feed;
+    } catch (error) {
+      if (error instanceof Error) {
+        // Re-throw our custom errors
+        if (error.message.includes('Authentication required') ||
+            error.message.includes('Access forbidden') ||
+            error.message.includes('not found') ||
+            error.message.includes('Server error') ||
+            error.message.includes('Invalid response type') ||
+            error.message.includes('Empty response') ||
+            error.message.includes('Request timeout')) {
+          throw error;
+        }
+      }
+
+      // Handle network errors
+      if (error instanceof TypeError) {
+        throw new Error('网络错误。请检查您的网络连接和URL。');
+      }
+
+      // Handle any other errors
+      throw new Error(`获取OPDS feed失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }
+
+  private isNavigationFeed(feed: OPDSFeed): boolean {
+    console.log('🔍 Checking if feed is navigation feed:', {
+      entriesCount: feed.entries.length,
+      hasEntries: feed.entries.length > 0
+    });
+
+    // Check if this is a navigation feed (no books, only navigation links)
+    const hasBooks = feed.entries.some(entry => {
+      // Check if entry has acquisition links (downloadable content)
+      const hasAcquisition = entry.links.some(link =>
+        link.rel.includes('acquisition') ||
+        link.type.includes('epub') ||
+        link.type.includes('mobi') ||
+        link.type.includes('pdf')
+      );
+      
+      if (hasAcquisition) {
+        console.log('📚 Found book entry:', entry.title);
+      }
+      
+      return hasAcquisition;
+    });
+
+    console.log('🔍 Navigation feed check result:', {
+      hasBooks,
+      isNavigationFeed: !hasBooks
+    });
+
+    // If no books found, it's likely a navigation feed
+    return !hasBooks;
+  }
+
+  private async loadAllBooks(
+    initialFeed: OPDSFeed,
+    baseUrl: string,
+    credentials?: OPDSCredentials,
+    timeoutMs?: number
+  ): Promise<OPDSFeed> {
+    console.log('📚 Starting to load all books from all pages...');
+    console.log('📚 Initial feed:', {
+      entries: initialFeed.entries.length,
+      nextLink: initialFeed.nextLink,
+      hasNextLink: !!initialFeed.nextLink
+    });
+    
+    const allEntries = [...initialFeed.entries];
+    let currentFeed = initialFeed;
+    let pageCount = 1;
+    let totalLoaded = initialFeed.entries.length;
+    
+    while (currentFeed.nextLink) {
+      pageCount++;
+      console.log(`📚 Loading page ${pageCount}, nextLink: ${currentFeed.nextLink}`);
+      
+      try {
+        const nextUrl = this.resolveUrl(baseUrl, currentFeed.nextLink);
+        console.log(`📚 Resolved URL: ${nextUrl}`);
+        
+        const nextFeed = await this.fetchFeedInternal(nextUrl, credentials, timeoutMs);
+        
+        console.log(`📚 Page ${pageCount} loaded successfully:`, {
+          entries: nextFeed.entries.length,
+          nextLink: nextFeed.nextLink,
+          hasNextLink: !!nextFeed.nextLink,
+          totalLoadedSoFar: totalLoaded + nextFeed.entries.length
+        });
+        
+        // Add new entries to our collection
+        allEntries.push(...nextFeed.entries);
+        totalLoaded = allEntries.length;
+        currentFeed = nextFeed;
+        
+        // Safety check to prevent infinite loops
+        if (pageCount > 50) { // Reduced from 100 to 50 for safety
+          console.warn('⚠️ Reached maximum page limit (50), stopping bulk loading');
+          break;
+        }
+        
+        // Add a small delay to prevent overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        console.error(`❌ Error loading page ${pageCount}:`, error);
+        console.error(`❌ Failed URL: ${currentFeed.nextLink ? this.resolveUrl(baseUrl, currentFeed.nextLink) : 'unknown'}`);
+        // Don't break on error, continue with what we have
+        break;
+      }
+    }
+    
+    console.log(`📚 Bulk loading completed: ${allEntries.length} total books from ${pageCount} pages`);
+    
+    // Return the final feed with all entries
+    return {
+      ...currentFeed,
+      entries: allEntries,
+      nextLink: undefined // No more pages to load
+    };
+  }
+
+  private findBooksFeedLink(feed: OPDSFeed): string | null {
+    // Look for common books feed links in order of preference
+    const preferredPaths = [
+      '/opds/books',      // All books
+      '/opds/new',        // New books  
+      '/opds/unreadbooks', // Unread books
+      '/opds/discover',   // Discover
+      '/opds/readbooks'   // Read books
+    ];
+
+    // First, try to find exact matches
+    for (const path of preferredPaths) {
+      const link = feed.links.find(link => 
+        link.href === path || 
+        link.href.endsWith(path) ||
+        link.href.includes(path)
+      );
+      if (link) {
+        console.log(`📚 Found preferred books feed: ${path} -> ${link.href}`);
+        return link.href;
+      }
+    }
+
+    // If no exact matches, look for any link that might be a books feed
+    const booksFeedLink = feed.links.find(link => {
+      const href = link.href.toLowerCase();
+      return (
+        href.includes('/books') ||
+        href.includes('/new') ||
+        href.includes('/unread') ||
+        href.includes('/discover') ||
+        (link.type && link.type.includes('opds-catalog') && !link.type.includes('navigation'))
+      );
+    });
+
+    if (booksFeedLink) {
+      console.log(`📚 Found potential books feed: ${booksFeedLink.href}`);
+      return booksFeedLink.href;
+    }
+
+    return null;
+  }
+
+  private async fetchFeedInternal(
+    url: string,
+    credentials?: OPDSCredentials,
+    timeoutMs?: number
+  ): Promise<OPDSFeed> {
+    try {
       // Foliate approach: use the URL as-is, no custom pagination parameters
       const requestUrl = url;
 
@@ -133,6 +354,16 @@ export class OPDSService {
         throw new Error('服务器返回空响应。');
       }
 
+      // Debug: Log the raw response for analysis
+      console.log('🔍 Raw OPDS response received:', {
+        url: requestUrl,
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        contentLength: xmlText.length,
+        first500Chars: xmlText.substring(0, 500),
+        last500Chars: xmlText.substring(Math.max(0, xmlText.length - 500))
+      });
+
       // 检查内容格式
       const trimmedText = xmlText.trim();
       if (!trimmedText.startsWith('<')) {
@@ -150,6 +381,15 @@ export class OPDSService {
         }
         throw new Error('无效的OPDS feed格式。响应内容不包含feed元素。');
       }
+
+      // Debug: Check for pagination links in raw XML
+      const nextLinkMatches = xmlText.match(/<link[^>]*rel=["']next["'][^>]*>/gi);
+      const prevLinkMatches = xmlText.match(/<link[^>]*rel=["']prev["'][^>]*>/gi);
+      console.log('🔍 Raw XML pagination links found:', {
+        nextLinks: nextLinkMatches || [],
+        prevLinks: prevLinkMatches || [],
+        hasNextInRaw: !!nextLinkMatches
+      });
 
       const feed = this.parser.parseFeed(xmlText);
 
@@ -357,6 +597,9 @@ export class OPDSService {
         entries: initialFeed.entries.length,
         nextLink: initialFeed.nextLink,
         hasNextLink: !!initialFeed.nextLink,
+        totalResults: initialFeed.opensearchTotalResults,
+        startIndex: initialFeed.opensearchStartIndex,
+        itemsPerPage: initialFeed.opensearchItemsPerPage,
         allLinks: initialFeed.links.map(link => ({ rel: link.rel, href: link.href }))
       });
 
@@ -369,7 +612,10 @@ export class OPDSService {
           console.log('📖 NextLink feed results:', {
             entries: nextFeed.entries.length,
             nextLink: nextFeed.nextLink,
-            hasNextLink: !!nextFeed.nextLink
+            hasNextLink: !!nextFeed.nextLink,
+            totalResults: nextFeed.opensearchTotalResults,
+            startIndex: nextFeed.opensearchStartIndex,
+            itemsPerPage: nextFeed.opensearchItemsPerPage
           });
 
           // Compare with initial feed to confirm different books
@@ -381,6 +627,28 @@ export class OPDSService {
 
           if (!hasOverlap) {
             console.log('✅ Pagination is working! Foliate-style approach successful.');
+            
+            // Test loading multiple pages to ensure it can go beyond 12 books
+            console.log('🔄 Testing multiple page loading...');
+            let currentFeed = nextFeed;
+            let pageCount = 2; // We've loaded 2 pages so far
+            const maxPages = 5; // Test up to 5 pages
+            
+            while (currentFeed.nextLink && pageCount < maxPages) {
+              console.log(`📄 Loading page ${pageCount + 1}...`);
+              const nextPageFeed = await this.fetchFeedByLink(currentFeed.nextLink, credentials, 10000);
+              
+              console.log(`📖 Page ${pageCount + 1} results:`, {
+                entries: nextPageFeed.entries.length,
+                nextLink: nextPageFeed.nextLink,
+                hasNextLink: !!nextPageFeed.nextLink
+              });
+              
+              pageCount++;
+              currentFeed = nextPageFeed;
+            }
+            
+            console.log(`✅ Successfully loaded ${pageCount} pages. Total books tested: ${pageCount * 12} (estimated)`);
           }
         } catch (nextError) {
           console.error('❌ NextLink failed:', nextError);
