@@ -73,6 +73,52 @@ export class OPDSParser {
     return links;
   }
 
+  private extractNextLink(doc: Document): string | undefined {
+    console.log('🔍 Starting nextLink extraction...');
+
+    // Debug: Log all links in the feed to see what we have
+    const allFeedLinks = doc.querySelectorAll('feed link, feed > link');
+    console.log('🔍 All feed links found:', Array.from(allFeedLinks).map(link => ({
+      rel: link.getAttribute('rel'),
+      href: link.getAttribute('href'),
+      title: link.getAttribute('title'),
+      tagName: link.tagName
+    })));
+
+    // Method 1: Direct CSS selector
+    const nextLinkElement = doc.querySelector('feed > link[rel="next"]');
+    if (nextLinkElement) {
+      const href = nextLinkElement.getAttribute('href');
+      console.log('🔗 Found nextLink via direct selector:', href);
+      return href || undefined;
+    }
+
+    // Method 2: Case-insensitive search through all feed links
+    const feedLinks = doc.querySelectorAll('feed link, feed > link');
+    for (const link of Array.from(feedLinks)) {
+      const rel = link.getAttribute('rel')?.toLowerCase();
+      const href = link.getAttribute('href');
+      if (rel === 'next' && href) {
+        console.log('🔗 Found nextLink via case-insensitive search:', href);
+        return href;
+      }
+    }
+
+    // Method 3: Search in any namespace
+    const allLinks = doc.querySelectorAll('link');
+    for (const link of Array.from(allLinks)) {
+      const rel = link.getAttribute('rel')?.toLowerCase();
+      const href = link.getAttribute('href');
+      if (rel === 'next' && href) {
+        console.log('🔗 Found nextLink via global search:', href);
+        return href;
+      }
+    }
+
+    console.log('❌ No nextLink found in feed after exhaustive search');
+    return undefined;
+  }
+
   private parseAuthors(entryElement: Element): string[] {
     const authorElements = entryElement.querySelectorAll('author name');
     const authors: string[] = [];
@@ -127,6 +173,11 @@ export class OPDSParser {
   private parseEntry(entryElement: Element): OPDSEntry {
     const id = this.getTextContent(entryElement.querySelector('id'));
     const title = this.getTextContent(entryElement.querySelector('title'));
+
+    // Debug empty IDs
+    if (!id || id.trim() === '') {
+      console.warn('⚠️ Found entry with empty ID:', { title, element: entryElement });
+    }
     const summary = this.getTextContent(entryElement.querySelector('summary'));
     const content = this.getTextContent(entryElement.querySelector('content'));
     const published = this.getTextContent(entryElement.querySelector('published'));
@@ -152,6 +203,8 @@ export class OPDSParser {
   }
 
   public parseFeed(xmlText: string): OPDSFeed {
+    console.log('🔍 Raw XML received (first 500 chars):', xmlText.substring(0, 500) + '...');
+
     const parser = new DOMParser();
     const doc = parser.parseFromString(xmlText, 'text/xml');
 
@@ -166,9 +219,16 @@ export class OPDSParser {
       throw new Error('无效的OPDS feed: 未找到feed元素');
     }
 
+    console.log('🔍 Feed element found, extracting nextLink...');
+
+    // Extract nextLink directly first (most reliable)
+    const nextLink = this.extractNextLink(doc);
+
     try {
       // Use foliate-js OPDS parser
       const foliateData = getFeed(doc) as FoliateFeed;
+
+      console.log('✅ Using foliate-js parser successfully');
 
       // Convert foliate-js format to our internal format
       const entries: OPDSEntry[] = [];
@@ -187,27 +247,31 @@ export class OPDSParser {
         });
       }
 
+      const parsedLinks = foliateData.links?.map((link) => ({
+        rel: Array.isArray(link.rel) ? link.rel.join(' ') : link.rel || '',
+        type: link.type || '',
+        href: link.href || '',
+        title: link.title,
+      })) || [];
+
       return {
         id: this.getTextContent(feed.querySelector('id')),
         title: foliateData.metadata?.title || '',
         subtitle: foliateData.metadata?.subtitle,
         updated: this.getTextContent(feed.querySelector('updated')),
-        links: foliateData.links?.map((link) => ({
-          rel: Array.isArray(link.rel) ? link.rel.join(' ') : link.rel || '',
-          type: link.type || '',
-          href: link.href || '',
-          title: link.title,
-        })) || [],
+        links: parsedLinks,
         entries,
+        // Use direct nextLink extraction (most reliable)
+        ...(nextLink && { nextLink }),
       };
     } catch (error) {
-      console.warn('Failed to use foliate-js parser, falling back to custom parser:', error);
+      console.warn('⚠️ Foliate-js parser failed, using fallback:', error);
       // Fallback to original implementation
-      return this.parseFeedFallback(xmlText);
+      return this.parseFeedFallback(xmlText, nextLink);
     }
   }
 
-  private parseFeedFallback(xmlText: string): OPDSFeed {
+  private parseFeedFallback(xmlText: string, extractedNextLink?: string): OPDSFeed {
     const parser = new DOMParser();
     const doc = parser.parseFromString(xmlText, 'text/xml');
     const feed = doc.querySelector('feed')!;
@@ -237,11 +301,13 @@ export class OPDSParser {
     const opensearchStartIndex = feed.querySelector('opensearch\\:startIndex, startIndex');
     const opensearchItemsPerPage = feed.querySelector('opensearch\\:itemsPerPage, itemsPerPage');
 
-    // Extract pagination links
-    const nextLink = links.find(link => link.rel.includes('next'));
-    const prevLink = links.find(link => link.rel.includes('prev'));
+    // Use the pre-extracted nextLink or try to find it in the parsed links
+    const fallbackNextLink = extractedNextLink || links.find(link => link.rel.includes('next'))?.href;
+    const prevLink = links.find(link => link.rel.includes('prev') || link.rel.includes('previous'));
     const firstLink = links.find(link => link.rel.includes('first'));
     const lastLink = links.find(link => link.rel.includes('last'));
+
+    console.log('🔍 Fallback parser - nextLink:', fallbackNextLink);
 
     return {
       id,
@@ -260,7 +326,7 @@ export class OPDSParser {
         opensearchItemsPerPage: parseInt(this.getTextContent(opensearchItemsPerPage), 10),
       }),
       // Add pagination links
-      ...(nextLink && { nextLink: nextLink.href }),
+      ...(fallbackNextLink && { nextLink: fallbackNextLink }),
       ...(prevLink && { prevLink: prevLink.href }),
       ...(firstLink && { firstLink: firstLink.href }),
       ...(lastLink && { lastLink: lastLink.href }),
@@ -338,8 +404,13 @@ export class OPDSParser {
       title: link.title,
     })) || [];
 
+    // Generate a stable ID if none exists
+    const id = pub.metadata?.identifier ||
+               links.find(l => l.rel.includes('acquisition'))?.href ||
+               `entry-${pub.metadata?.title?.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}-${Date.now()}`;
+
     return {
-      id: pub.metadata?.identifier || '',
+      id,
       title: pub.metadata?.title || '',
       authors: pub.metadata?.author?.map((author) => author.name).filter(Boolean) || [],
       summary: (pub.metadata?.[SYMBOL.CONTENT] as { value?: string })?.value || (pub.metadata as { [key: symbol]: string })?.[SYMBOL.SUMMARY] || '',

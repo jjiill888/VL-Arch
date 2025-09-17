@@ -54,47 +54,17 @@ export class OPDSService {
   public async fetchFeed(
     url: string,
     credentials?: OPDSCredentials,
-    timeoutMs?: number,
-    page?: number,
-    itemsPerPage?: number
+    timeoutMs?: number
   ): Promise<OPDSFeed> {
-    console.log('OPDS fetchFeed called:', {
+    console.log('OPDS fetchFeed called (Foliate-style):', {
       url,
       hasCredentials: !!credentials,
-      isTauri: isTauriAppPlatform(),
-      page,
-      itemsPerPage
+      isTauri: isTauriAppPlatform()
     });
 
     try {
-      // Use the URL as-is for now - we'll handle pagination through links
-      let requestUrl = url;
-      
-      // Add pagination parameters for Calibre-Web
-      if (page !== undefined && page > 1) {
-        const urlObj = new URL(url);
-        const pageSize = itemsPerPage || 20;
-        const startIndex = (page - 1) * pageSize;
-        
-        // Calibre-Web specific pagination parameters
-        urlObj.searchParams.set('start', startIndex.toString());
-        urlObj.searchParams.set('size', pageSize.toString());
-        
-        // Also try other common parameters
-        urlObj.searchParams.set('page', page.toString());
-        urlObj.searchParams.set('limit', pageSize.toString());
-        urlObj.searchParams.set('count', pageSize.toString());
-        
-        requestUrl = urlObj.toString();
-        console.log('Modified URL for Calibre-Web pagination:', requestUrl);
-      } else if (page === 1 && itemsPerPage !== undefined) {
-        // Even for page 1, try to set size parameter
-        const urlObj = new URL(url);
-        urlObj.searchParams.set('size', itemsPerPage.toString());
-        urlObj.searchParams.set('limit', itemsPerPage.toString());
-        requestUrl = urlObj.toString();
-        console.log('Modified URL for Calibre-Web size parameter:', requestUrl);
-      }
+      // Foliate approach: use the URL as-is, no custom pagination parameters
+      const requestUrl = url;
 
       let response: Response;
 
@@ -183,21 +153,14 @@ export class OPDSService {
 
       const feed = this.parser.parseFeed(xmlText);
 
-      // Debug: Log feed information
-      console.log('Parsed OPDS feed:', {
+      // Debug: Log feed information (Foliate-style)
+      console.log('✅ Parsed OPDS feed successfully:', {
         id: feed.id,
         title: feed.title,
         entriesCount: feed.entries.length,
-        totalResults: feed.opensearchTotalResults,
-        startIndex: feed.opensearchStartIndex,
-        itemsPerPage: feed.opensearchItemsPerPage,
         requestUrl: requestUrl,
-        requestedPage: page,
-        requestedItemsPerPage: itemsPerPage,
         nextLink: feed.nextLink,
-        prevLink: feed.prevLink,
-        firstLink: feed.firstLink,
-        lastLink: feed.lastLink
+        hasNextLink: !!feed.nextLink
       });
       
       // Log all links to see what pagination links are available
@@ -381,69 +344,53 @@ export class OPDSService {
     }
   }
 
+
   public async testPagination(url: string, credentials?: OPDSCredentials): Promise<void> {
-    console.log('Testing Calibre-Web OPDS pagination for:', url);
-    
+    console.log('🔍 Testing OPDS pagination (Foliate-style) for:', url);
+
     try {
-      // Test page 1 with size parameter
-      console.log('Testing page 1 with size=50...');
-      const feed1 = await this.fetchFeed(url, credentials, 10000, 1, 50);
-      console.log('Page 1 results:', {
-        entries: feed1.entries.length,
-        totalResults: feed1.opensearchTotalResults,
-        startIndex: feed1.opensearchStartIndex,
-        itemsPerPage: feed1.opensearchItemsPerPage,
-        nextLink: feed1.nextLink,
-        prevLink: feed1.prevLink
+      // Test initial feed
+      console.log('📖 Fetching initial feed...');
+      const initialFeed = await this.fetchFeed(url, credentials, 10000);
+
+      console.log('📊 Initial feed results:', {
+        entries: initialFeed.entries.length,
+        nextLink: initialFeed.nextLink,
+        hasNextLink: !!initialFeed.nextLink,
+        allLinks: initialFeed.links.map(link => ({ rel: link.rel, href: link.href }))
       });
-      
-      // Test page 2 with start/size parameters
-      console.log('Testing page 2 with start=50&size=50...');
-      const feed2 = await this.fetchFeed(url, credentials, 10000, 2, 50);
-      console.log('Page 2 results:', {
-        entries: feed2.entries.length,
-        totalResults: feed2.opensearchTotalResults,
-        startIndex: feed2.opensearchStartIndex,
-        itemsPerPage: feed2.opensearchItemsPerPage,
-        nextLink: feed2.nextLink,
-        prevLink: feed2.prevLink
-      });
-      
-      // Test using nextLink if available
-      if (feed1.nextLink) {
-        console.log('Testing nextLink:', feed1.nextLink);
-        const feed3 = await this.fetchFeedByLink(feed1.nextLink, credentials, 10000);
-        console.log('NextLink results:', {
-          entries: feed3.entries.length,
-          totalResults: feed3.opensearchTotalResults,
-          startIndex: feed3.opensearchStartIndex,
-          itemsPerPage: feed3.opensearchItemsPerPage
-        });
-      }
-      
-      // Compare results
-      if (feed1.entries.length > 0 && feed2.entries.length > 0) {
-        const page1Ids = feed1.entries.map(e => e.id);
-        const page2Ids = feed2.entries.map(e => e.id);
-        const hasOverlap = page1Ids.some(id => page2Ids.includes(id));
-        console.log('Page overlap check:', hasOverlap ? 'SAME BOOKS (pagination not working)' : 'DIFFERENT BOOKS (pagination working)');
-        
-        if (hasOverlap) {
-          console.log('Page 1 IDs:', page1Ids.slice(0, 5));
-          console.log('Page 2 IDs:', page2Ids.slice(0, 5));
+
+      // Test nextLink if available (Foliate approach)
+      if (initialFeed.nextLink) {
+        console.log('🔗 Testing nextLink (Foliate approach):', initialFeed.nextLink);
+
+        try {
+          const nextFeed = await this.fetchFeedByLink(initialFeed.nextLink, credentials, 10000);
+          console.log('📖 NextLink feed results:', {
+            entries: nextFeed.entries.length,
+            nextLink: nextFeed.nextLink,
+            hasNextLink: !!nextFeed.nextLink
+          });
+
+          // Compare with initial feed to confirm different books
+          const initialIds = initialFeed.entries.slice(0, 3).map(e => e.id);
+          const nextIds = nextFeed.entries.slice(0, 3).map(e => e.id);
+          const hasOverlap = initialIds.some(id => nextIds.includes(id));
+
+          console.log('🔍 Pagination test result:', hasOverlap ? '❌ SAME BOOKS (pagination not working)' : '✅ DIFFERENT BOOKS (pagination working correctly)');
+
+          if (!hasOverlap) {
+            console.log('✅ Pagination is working! Foliate-style approach successful.');
+          }
+        } catch (nextError) {
+          console.error('❌ NextLink failed:', nextError);
         }
+      } else {
+        console.log('❌ No nextLink found in initial feed. Server might not support pagination or there are no more pages.');
       }
-      
-      // Test different size parameters
-      console.log('Testing with size=100...');
-      const feedLarge = await this.fetchFeed(url, credentials, 10000, 1, 100);
-      console.log('Large size results:', {
-        entries: feedLarge.entries.length,
-        totalResults: feedLarge.opensearchTotalResults
-      });
-      
+
     } catch (error) {
-      console.error('Calibre-Web pagination test failed:', error);
+      console.error('❌ Pagination test failed:', error);
     }
   }
 

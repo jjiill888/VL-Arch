@@ -145,10 +145,28 @@ export class OPDSLibraryManager {
 
       // Update pagination info if available
       if (feed) {
-        const itemsPerPage = feed.opensearchItemsPerPage || 20;
-        const currentPage = feed.opensearchStartIndex ? Math.floor(feed.opensearchStartIndex / itemsPerPage) + 1 : 1;
+        // Calibre-Web uses 12 items per page and doesn't provide OpenSearch elements
+        const itemsPerPage = feed.opensearchItemsPerPage || 12; // Calibre-Web default
+        let currentPage: number;
+
+        if (append && library.pagination) {
+          // If we're appending, increment the current page
+          currentPage = library.pagination.currentPage + 1;
+        } else if (feed.opensearchStartIndex !== undefined) {
+          // Calculate from start index
+          currentPage = Math.floor(feed.opensearchStartIndex / itemsPerPage) + 1;
+        } else {
+          // For Calibre-Web, calculate page from current books count if appending
+          // Otherwise default to page 1
+          if (append) {
+            currentPage = Math.floor(library.books.length / itemsPerPage) + 1;
+          } else {
+            currentPage = 1;
+          }
+        }
+
         const totalPages = feed.opensearchTotalResults ? Math.ceil(feed.opensearchTotalResults / itemsPerPage) : undefined;
-        
+
         library.pagination = {
           totalResults: feed.opensearchTotalResults,
           currentPage: currentPage,
@@ -168,45 +186,15 @@ export class OPDSLibraryManager {
   }
 
   private calculateHasMore(feed: OPDSFeed): boolean {
-    console.log('Calculating hasMore for feed:', {
-      totalResults: feed.opensearchTotalResults,
-      startIndex: feed.opensearchStartIndex,
-      itemsPerPage: feed.opensearchItemsPerPage,
+    console.log('Calculating hasMore (Foliate-style):', {
       entriesCount: feed.entries.length,
       nextLink: feed.nextLink,
-      prevLink: feed.prevLink
+      hasNextLink: !!feed.nextLink
     });
 
-    // First priority: check if we have a nextLink
-    if (feed.nextLink) {
-      console.log('Has nextLink, assuming there are more books');
-      return true;
-    }
-
-    // Second priority: use OpenSearch pagination info
-    if (feed.opensearchTotalResults && feed.opensearchStartIndex !== undefined && feed.opensearchItemsPerPage) {
-      const currentPage = Math.floor(feed.opensearchStartIndex / feed.opensearchItemsPerPage) + 1;
-      const totalPages = Math.ceil(feed.opensearchTotalResults / feed.opensearchItemsPerPage);
-      const hasMore = currentPage < totalPages;
-      console.log('OpenSearch hasMore (page-based):', hasMore, `(page ${currentPage} of ${totalPages})`);
-      return hasMore;
-    }
-
-    // Fallback: if we got fewer entries than requested, assume no more pages
-    // This is a heuristic - if we requested 20 items but only got 12, there might be more
-    // But if we got exactly what we requested, there might be more
-    const requestedItems = 20; // Default page size
-    const hasMoreByCount = feed.entries.length >= requestedItems;
-    console.log('Fallback hasMore by count:', hasMoreByCount, `(${feed.entries.length} >= ${requestedItems})`);
-    
-    // If we don't have OpenSearch info, be more aggressive about showing pagination
-    // Many OPDS servers don't provide proper pagination info, so we should try to load more
-    if (!feed.opensearchTotalResults && !feed.opensearchStartIndex && !feed.opensearchItemsPerPage) {
-      console.log('No OpenSearch info available, assuming there might be more books');
-      return true; // Always show pagination if no OpenSearch info
-    }
-    
-    return hasMoreByCount;
+    // Foliate approach: simply check if there's a rel="next" link
+    // This is the standard OPDS way and what Calibre-Web provides
+    return !!feed.nextLink;
   }
 
   public addDownloadedBook(shelfId: string, book: Book) {
@@ -340,47 +328,30 @@ export class OPDSLibraryManager {
       console.log('hasMoreBooks: No library found for', libraryId);
       return false;
     }
-    
-    console.log('hasMoreBooks check:', {
+
+    // Foliate approach: simply check if we have a nextLink
+    const hasNext = !!library.pagination?.nextLink;
+
+    console.log('hasMoreBooks (Foliate-style):', {
       libraryId,
-      booksCount: library.books.length,
-      pagination: library.pagination,
-      hasMoreFromPagination: library.pagination?.hasMore
+      hasNextLink: hasNext,
+      nextLink: library.pagination?.nextLink
     });
-    
-    // Check if we have pagination info
-    if (library.pagination?.hasMore !== undefined) {
-      console.log('hasMoreBooks: Using pagination info:', library.pagination.hasMore);
-      return library.pagination.hasMore;
-    }
-    
-    // Fallback: if we have books and no pagination info, assume there might be more
-    // This is a heuristic - we'll try to load more and see what happens
-    // Be more aggressive: if we have any books, show pagination
-    const fallbackResult = library.books.length > 0;
-    console.log('hasMoreBooks: Using fallback logic:', fallbackResult, `(books: ${library.books.length})`);
-    
-    // If we have books but no pagination info, always show pagination
-    // This allows users to try loading more books even if the server doesn't provide proper pagination info
-    if (library.books.length > 0 && !library.pagination) {
-      console.log('hasMoreBooks: No pagination info but have books, showing pagination');
-      return true;
-    }
-    
-    return fallbackResult;
+
+    return hasNext;
   }
 
   public getNextPageNumber(libraryId: string): number {
     const library = this.libraries.get(libraryId);
     if (!library) return 1;
-    
+
     // If we have pagination info, use it
     if (library.pagination) {
       return library.pagination.currentPage + 1;
     }
-    
+
     // Fallback: calculate page based on current books count
-    const itemsPerPage = 20; // Default page size
+    const itemsPerPage = 12; // Calibre-Web page size
     return Math.floor(library.books.length / itemsPerPage) + 1;
   }
 

@@ -77,11 +77,32 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeed(library.url, library.credentials, undefined, 1, 50);
+      const feed = await opdsService.fetchFeed(library.url, library.credentials);
       const books = opdsService.getBooks(feed);
-      
+
+      console.log('📖 Initial feed loaded:', {
+        feedEntries: feed.entries.length,
+        parsedBooks: books.length,
+        nextLink: feed.nextLink,
+        hasNextLink: !!feed.nextLink,
+        feedLinks: feed.links.map(link => ({ rel: link.rel, href: link.href }))
+      });
+
       opdsLibraryManager.updateLibraryBooks(library.id, books, feed);
       setAvailableBooks(opdsLibraryManager.getAvailableBooks(shelfId));
+
+      // Debug pagination logic
+      const hasMore = opdsLibraryManager.hasMoreBooks(library.id);
+      const libraryData = opdsLibraryManager.getLibrary(library.id);
+
+      console.log('🔍 Pagination Status After Initial Load:', {
+        hasMoreBooks: hasMore,
+        totalBooksInLibrary: libraryData?.books.length,
+        libraryPagination: libraryData?.pagination,
+        availableBooksCount: books.length,
+        nextLink: libraryData?.pagination?.nextLink,
+        willShowLoadMoreButton: hasMore
+      });
       
       eventDispatcher.dispatch('toast', {
         message: _('书架已更新'),
@@ -113,31 +134,26 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
     setError('');
 
     try {
-      // Try to use nextLink first, fallback to page-based pagination
+      // Foliate approach: only use the nextLink provided by the server
       const nextLink = opdsLibraryManager.getNextPageLink(library.id);
-      const nextPage = opdsLibraryManager.getNextPageNumber(library.id);
-      
-      console.log('Loading more books:', {
-        libraryId: library.id,
-        nextPage,
-        nextLink,
-        currentBooksCount: availableBooks.length
-      });
 
-      let feed;
-      if (nextLink) {
-        console.log('Using nextLink for pagination:', nextLink);
-        feed = await opdsService.fetchFeedByLink(nextLink, library.credentials);
-      } else {
-        console.log('Using page-based pagination:', nextPage);
-        feed = await opdsService.fetchFeed(
-          library.url, 
-          library.credentials, 
-          undefined, 
-          nextPage, 
-          50 // Load 50 more books
-        );
+      if (!nextLink) {
+        console.log('No nextLink available, cannot load more books');
+        eventDispatcher.dispatch('toast', {
+          message: _('没有更多书籍了'),
+          type: 'info',
+        });
+        return;
       }
+
+      console.log('📚 Loading more books using nextLink (Foliate-style):', nextLink);
+      const feed = await opdsService.fetchFeedByLink(nextLink, library.credentials);
+
+      console.log('📚 Next page feed loaded:', {
+        feedEntries: feed.entries.length,
+        nextLink: feed.nextLink,
+        hasMoreAfterThis: !!feed.nextLink
+      });
       
       console.log('Received feed:', {
         entriesCount: feed.entries.length,
@@ -160,7 +176,19 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
       
       opdsLibraryManager.updateLibraryBooks(library.id, books, feed, true);
       setAvailableBooks(opdsLibraryManager.getAvailableBooks(shelfId));
-      
+
+      // Debug after loading more
+      const updatedLibrary = opdsLibraryManager.getLibrary(library.id);
+      const updatedHasMore = opdsLibraryManager.hasMoreBooks(library.id);
+
+      console.log('📚 After loading more books:', {
+        totalBooksNow: updatedLibrary?.books.length,
+        availableBooksNow: opdsLibraryManager.getAvailableBooks(shelfId).length,
+        nextLinkNow: updatedLibrary?.pagination?.nextLink,
+        hasMoreNow: updatedHasMore,
+        willShowLoadMoreButtonNow: updatedHasMore
+      });
+
       eventDispatcher.dispatch('toast', {
         message: _('已加载更多书籍'),
         type: 'success',
@@ -402,11 +430,27 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                 <div>
                   <h3 className="text-lg font-semibold mb-3">{_('书籍')}</h3>
                   <div className="grid gap-4">
-                    {availableBooks.map((book) => (
-                      <div
-                        key={book.id}
-                        className="flex gap-3 p-3 bg-base-100 border border-base-300 rounded-lg hover:bg-base-200 transition-colors"
-                      >
+                    {availableBooks.map((book, index) => {
+                      // Create stable unique key using book properties
+                      const createUniqueKey = () => {
+                        if (book.id && book.id.trim() !== '') return book.id;
+
+                        // Use acquisition link href as backup ID (most stable)
+                        const acquisitionHref = book.downloadLinks?.[0]?.href;
+                        if (acquisitionHref) return acquisitionHref;
+
+                        // Use title + author combination as last resort
+                        const titleSlug = book.title?.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'unknown';
+                        const authorSlug = book.authors?.[0]?.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'noauthor';
+                        return `book-${titleSlug}-${authorSlug}-${index}`;
+                      };
+
+                      const uniqueKey = createUniqueKey();
+                      return (
+                        <div
+                          key={uniqueKey}
+                          className="flex gap-3 p-3 bg-base-100 border border-base-300 rounded-lg hover:bg-base-200 transition-colors"
+                        >
                         {/* Book Icon */}
                         <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0">
                           <MdBook className="w-8 h-8 text-base-content/30" />
@@ -481,7 +525,8 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   
                   {/* Pagination Controls */}
@@ -493,24 +538,33 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                           {_('第')} {library.pagination.currentPage} {_('页')}
                           {library.pagination.totalPages && ` / ${library.pagination.totalPages} ${_('页')}`}
                           {library.pagination.totalResults && ` (${library.pagination.totalResults} ${_('本书')})`}
+                          <br />
+                          <span className="text-xs text-base-content/50">
+                            已加载: {library.books.length} |
+                            页大小: {library.pagination.itemsPerPage} |
+                            有更多: {library.pagination.hasMore ? '是' : '否'}
+                            {library.pagination.nextLink && ' | 有下一页链接'}
+                          </span>
                         </div>
                       )}
                       
-                      {/* Test Pagination Button */}
-                      <button
-                        onClick={handleTestPagination}
-                        className="btn btn-ghost btn-xs mr-2"
-                        title="测试分页功能"
-                      >
-                        {_('测试分页')}
-                      </button>
+                      {/* Test Pagination Button - Always visible for debugging */}
+                      <div className="mb-3">
+                        <button
+                          onClick={handleTestPagination}
+                          className="btn btn-secondary btn-sm mr-3"
+                          title="测试分页功能，查看控制台日志"
+                        >
+                          🔍 {_('测试分页')}
+                        </button>
+                      </div>
                       
                       {/* Load More Button */}
                       {opdsLibraryManager.hasMoreBooks(library.id) && (
                         <button
                           onClick={handleLoadMore}
                           disabled={loadingMore}
-                          className="btn btn-outline btn-sm"
+                          className="btn btn-primary btn-sm"
                         >
                           {loadingMore ? (
                             <>
@@ -519,16 +573,23 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                             </>
                           ) : (
                             <>
-                              {_('加载第')} {opdsLibraryManager.getNextPageNumber(library.id)} {_('页')}
+                              📚 {_('加载更多书籍')}
                             </>
                           )}
                         </button>
                       )}
-                      
+
+                      {/* Debug Info */}
+                      <div className="mt-2 text-xs text-base-content/50">
+                        调试: hasNextLink = {opdsLibraryManager.hasMoreBooks(library.id) ? '是' : '否'} |
+                        书籍数量 = {library.books.length}
+                        {library.pagination?.nextLink && ` | nextLink: ...${library.pagination.nextLink.slice(-20)}`}
+                      </div>
+
                       {/* No More Books Message */}
                       {!opdsLibraryManager.hasMoreBooks(library.id) && library.pagination && (
-                        <div className="text-sm text-base-content/50">
-                          {_('已加载所有书籍')}
+                        <div className="text-sm text-base-content/50 mt-2">
+                          ✅ {_('已加载所有书籍')}
                         </div>
                       )}
                     </div>

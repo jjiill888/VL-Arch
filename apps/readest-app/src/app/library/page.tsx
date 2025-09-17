@@ -635,7 +635,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     // Create OPDS library and shelf
     try {
       const opdsService = new OPDSService();
-      const feed = await opdsService.fetchFeed(opdsUrl, { username, password }, undefined, 1, 50);
+      const feed = await opdsService.fetchFeed(opdsUrl, { username, password });
       const books = opdsService.getBooks(feed);
       
       // Create library
@@ -685,7 +685,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     try {
       console.log('Trying OPDS without authentication for:', opdsUrl);
       const opdsService = new OPDSService();
-      const feed = await opdsService.fetchFeed(opdsUrl, undefined, undefined, 1, 50); // No credentials
+      const feed = await opdsService.fetchFeed(opdsUrl); // No credentials
       const books = opdsService.getBooks(feed);
 
       // Create library
