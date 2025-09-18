@@ -670,8 +670,8 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                           </>
                         )}
                       </div>
-                      );
-                    })}
+                    );
+                  })}
                       </div>
                     </div>
                   </div>

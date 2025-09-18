@@ -39,6 +39,10 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
   const [isAscending] = useState(false); // Default to descending (newest first)
   const [breadcrumbs, setBreadcrumbs] = useState<Array<{title: string, url: string}>>([]);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const booksPerPage = 12;
+
   const loadShelfData = useCallback(async () => {
     const shelfData = opdsLibraryManager.getShelf(shelfId);
     if (!shelfData) {
@@ -71,6 +75,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
       setNavigationItems(feedNavigation);
       setAvailableBooks(feedBooks);
+      setCurrentPage(0); // Reset to first page when loading new data
 
       // Set up initial breadcrumb
       setBreadcrumbs([{ title: libraryData.name, url: libraryData.url }]);
@@ -100,6 +105,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
       setNavigationItems(feedNavigation);
       setAvailableBooks(feedBooks);
+      setCurrentPage(0); // Reset to first page when refreshing
 
       // Reset to root breadcrumb
       setBreadcrumbs([{ title: library.name, url: library.url }]);
@@ -137,6 +143,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
       setNavigationItems(feedNavigation);
       setAvailableBooks(feedBooks);
+      setCurrentPage(0); // Reset to first page when navigating
 
       // Add to breadcrumbs
       setBreadcrumbs(prev => [...prev, { title: item.title, url: item.href }]);
@@ -172,6 +179,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
       setNavigationItems(feedNavigation);
       setAvailableBooks(feedBooks);
+      setCurrentPage(0); // Reset to first page when using breadcrumbs
 
       // Trim breadcrumbs to current position
       setBreadcrumbs(breadcrumbs.slice(0, index + 1));
@@ -259,6 +267,44 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     });
   }, [availableBooks, sortBy, isAscending]);
 
+  // Get current page books
+  const totalPages = Math.ceil(sortedAvailableBooks.length / booksPerPage);
+  const currentPageBooks = sortedAvailableBooks.slice(
+    currentPage * booksPerPage,
+    (currentPage + 1) * booksPerPage
+  );
+
+  // Navigation functions
+  const handleNextPage = () => {
+    if (currentPage < totalPages - 1) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 0) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  // Keyboard event handler
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        handlePreviousPage();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        handleNextPage();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [currentPage, totalPages]);
+
 
   if (error) {
     return (
@@ -307,7 +353,8 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
             </div>
           )}
           <p className='text-base-content/70 mt-1'>
-            {availableBooks.filter(book => opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book)).length} downloaded • {availableBooks.length} available • {navigationItems.length} categories
+            {sortedAvailableBooks.filter(book => opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book)).length} downloaded • {sortedAvailableBooks.length} available • {navigationItems.length} categories
+            {totalPages > 1 && ` • ${_('第')} ${currentPage + 1} ${_('页')} / ${totalPages} ${_('页')}`}
           </p>
         </div>
         <button
@@ -357,62 +404,126 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
 
         {/* Available books */}
-        {sortedAvailableBooks.length > 0 && (
+        {currentPageBooks.length > 0 && (
           <div className='mb-8'>
-            <h3 className='text-lg font-semibold mb-4 flex items-center gap-2'>
-              <MdBook className='text-secondary' />
-              {_('Available Books')}
-            </h3>
-            <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
-              {sortedAvailableBooks.map((book) => {
+            <div className='flex items-center justify-between mb-6'>
+              <h3 className='text-lg font-semibold flex items-center gap-2'>
+                <MdBook className='text-secondary' />
+                {_('Available Books')}
+              </h3>
+              {totalPages > 1 && (
+                <div className='flex items-center gap-2 relative z-10'>
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 0}
+                    className='btn btn-outline btn-sm shadow-lg'
+                  >
+                    ← {_('上一页')}
+                  </button>
+
+                  <span className='text-sm text-base-content/70 bg-base-100 px-2 py-1 rounded shadow'>
+                    {currentPage + 1} / {totalPages}
+                  </span>
+
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage >= totalPages - 1}
+                    className='btn btn-primary btn-sm shadow-lg'
+                  >
+                    {_('下一页')} →
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className='max-w-7xl mx-auto'>
+              <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-6 gap-6'>
+              {currentPageBooks.map((book) => {
                 const isDownloaded = opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book);
                 const isDownloading = downloadingBooks.has(book.id);
 
                 return (
-                  <div key={book.id} className='bg-base-100 rounded-lg shadow hover:shadow-lg transition-shadow p-3'>
-                    <div className='aspect-[3/4] bg-base-300 rounded mb-2 flex items-center justify-center'>
+                  <div key={book.id} className='bg-base-100 rounded-lg shadow hover:shadow-lg transition-shadow p-3 h-fit'>
+                    <div className='aspect-[3/4] bg-base-300 rounded mb-3 flex items-center justify-center'>
                       <MdBook className='w-12 h-12 text-base-content/30' />
                     </div>
-                    <h4 className='font-semibold text-sm truncate' title={book.title}>
-                      {book.title}
-                    </h4>
-                    <p className='text-xs text-base-content/70 truncate'>
-                      {book.authors.join(', ')}
-                    </p>
-                    {book.summary && (
-                      <p className='text-xs text-base-content/60 mt-1 line-clamp-2'>
-                        {book.summary}
+                    <div className='space-y-2'>
+                      <h4 className='font-semibold text-sm line-clamp-2 min-h-[2.5rem]' title={book.title}>
+                        {book.title}
+                      </h4>
+                      <p className='text-xs text-base-content/70 line-clamp-1'>
+                        {book.authors.join(', ')}
                       </p>
-                    )}
-                    <div className='mt-2'>
-                      {isDownloaded ? (
-                        <span className='text-xs bg-success text-success-content px-2 py-1 rounded'>
-                          {_('Downloaded')}
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleBookDownload(book)}
-                          disabled={isDownloading}
-                          className='btn btn-primary btn-xs w-full gap-1'
-                        >
-                          {isDownloading ? (
-                            <Spinner loading />
-                          ) : (
-                            <MdDownload />
-                          )}
-                          {isDownloading ? _('Downloading...') : _('Download')}
-                        </button>
+                      {book.summary && (
+                        <p className='text-xs text-base-content/60 line-clamp-2 min-h-[2rem]'>
+                          {book.summary}
+                        </p>
                       )}
+                      <div className='pt-2'>
+                        {isDownloaded ? (
+                          <span className='text-xs bg-success text-success-content px-2 py-1 rounded block text-center'>
+                            {_('Downloaded')}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleBookDownload(book)}
+                            disabled={isDownloading}
+                            className='btn btn-primary btn-xs w-full gap-1'
+                          >
+                            {isDownloading ? (
+                              <Spinner loading />
+                            ) : (
+                              <MdDownload />
+                            )}
+                            {isDownloading ? _('Downloading...') : _('Download')}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })}
+              </div>
             </div>
+
+            {/* Bottom pagination controls */}
+            {totalPages > 1 && (
+              <div className='mt-8 pt-6 border-t border-base-300 flex items-center justify-center gap-4'>
+                <button
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 0}
+                  className='btn btn-outline btn-sm shadow-lg'
+                >
+                  ← {_('上一页')}
+                </button>
+
+                <div className='flex items-center gap-2 text-sm text-base-content/70 bg-base-100 px-3 py-2 rounded shadow'>
+                  <span>{_('第')} {currentPage + 1} {_('页')} / {totalPages} {_('页')}</span>
+                  <span>({currentPageBooks.length} / {sortedAvailableBooks.length} {_('本书')})</span>
+                </div>
+
+                <button
+                  onClick={handleNextPage}
+                  disabled={currentPage >= totalPages - 1}
+                  className='btn btn-primary btn-sm shadow-lg'
+                >
+                  {_('下一页')} →
+                </button>
+              </div>
+            )}
+
+            {/* Keyboard navigation hint */}
+            {totalPages > 1 && (
+              <div className='mt-3 text-center pb-8'>
+                <div className='text-xs text-base-content/50'>
+                  {_('使用左右方向键翻页')}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Empty state */}
-        {navigationItems.length === 0 && availableBooks.length === 0 && !loading && (
+        {navigationItems.length === 0 && sortedAvailableBooks.length === 0 && !loading && (
           <div className='flex flex-col items-center justify-center h-full text-center'>
             <MdBook className='text-6xl text-base-content/30 mb-4' />
             <h3 className='text-xl font-semibold mb-2'>{_('No Content')}</h3>
