@@ -525,7 +525,7 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                   >
                     <div className="px-6">
                       <div className={viewMode === 'grid'
-                        ? "grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+                        ? "grid gap-4 grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-12"
                         : "grid gap-4"
                       }>
                     {availableBooks.map((book, index) => {
@@ -556,19 +556,15 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                           <>
                             {/* Grid Mode - Card Layout */}
                             <div className="aspect-[28/41] bg-base-300 rounded-t-lg flex items-center justify-center">
-                              <MdBook className="w-12 h-12 text-base-content/30" />
+                              <MdBook className="w-8 h-8 text-base-content/30" />
                             </div>
-                            <div className="p-3 flex-1 flex flex-col">
-                              <h4 className="font-medium text-base-content text-sm line-clamp-2 mb-1">
+                            <div className="p-2 flex-1 flex flex-col">
+                              <h4 className="font-medium text-base-content text-xs line-clamp-2 mb-1 min-h-[1.5rem]">
                                 {book.title}
                               </h4>
-                              <p className="text-xs text-base-content/70 line-clamp-1 mb-2">
+                              <p className="text-xs text-base-content/70 line-clamp-1 mb-1">
                                 {formatAuthors(book.authors)}
                               </p>
-                              <div className="flex items-center gap-1 text-xs text-base-content/50 mb-2">
-                                {book.published && <span>{new Date(book.published).getFullYear()}</span>}
-                                {book.language && <span>• {book.language}</span>}
-                              </div>
                               {/* Grid Mode Download Section */}
                               <div className="flex items-center justify-center gap-2">
                                 {downloadProgress.has(book.id) ? (
@@ -605,18 +601,6 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                               <p className="text-sm text-base-content/70 mb-2">
                                 {formatAuthors(book.authors)}
                               </p>
-                              {book.summary && (
-                                <p className="text-xs text-base-content/60 line-clamp-2 mb-2">
-                                  {cleanSummary(book.summary)}
-                                </p>
-                              )}
-                              <div className="flex items-center gap-2 text-xs text-base-content/50">
-                                {book.published && <span>{new Date(book.published).getFullYear()}</span>}
-                                {book.language && <span>• {book.language}</span>}
-                                {book.categories && book.categories.length > 0 && (
-                                  <span>• {book.categories[0]}</span>
-                                )}
-                              </div>
                             </div>
 
                             {/* List Mode Download Section */}
