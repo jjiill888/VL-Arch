@@ -16,7 +16,7 @@ import { tauriDownload } from '@/utils/transfer';
 import { installPackage } from '@/utils/bridge';
 import { getLocale } from '@/utils/misc';
 import { setLastShownReleaseNotesVersion } from '@/helpers/updater';
-import { READEST_UPDATER_FILE, READEST_CHANGELOG_FILE } from '@/services/constants';
+import { VLARCH_UPDATER_FILE, VLARCH_CHANGELOG_FILE } from '@/services/constants';
 import Dialog from '@/components/Dialog';
 import Link from './Link';
 
@@ -108,7 +108,7 @@ export const UpdaterContent = ({
     const checkAndroidUpdate = async () => {
       if (!appService) return;
       const fetch = isTauriAppPlatform() ? tauriFetch : window.fetch;
-      const response = await fetch(READEST_UPDATER_FILE);
+      const response = await fetch(VLARCH_UPDATER_FILE);
       const data = await response.json();
       if (semver.gt(data.version, currentVersion)) {
         const OS_ARCH = osArch();
@@ -201,7 +201,7 @@ export const UpdaterContent = ({
     const fetchChangelogs = async (fromVersion: string): Promise<Changelog[]> => {
       try {
         const fetch = isTauriAppPlatform() ? tauriFetch : window.fetch;
-        const res = await fetch(READEST_CHANGELOG_FILE);
+        const res = await fetch(VLARCH_CHANGELOG_FILE);
         const data: ReleaseNotes = await res.json();
         const releases = data.releases;
 
@@ -380,7 +380,7 @@ export const UpdaterContent = ({
 
                     {appService?.isAndroidApp && (
                       <Link
-                        href='https://play.google.com/store/apps/details?id=com.bilingify.readest'
+                        href='https://play.google.com/store/apps/details?id=com.vlarch.vlarch'
                         target='_blank'
                         rel='noopener noreferrer'
                         className='btn btn-primary btn-sm'
@@ -479,7 +479,7 @@ export const UpdaterWindow = () => {
     <Dialog
       id='updater_window'
       isOpen={isOpen}
-      title={checkUpdate ? _('Software Update') : _("What's New in Readest")}
+      title={checkUpdate ? _('Software Update') : _("What's New in VL-Arch")}
       onClose={() => setIsOpen(false)}
       boxClassName='sm:!w-[75%] sm:h-auto sm:!max-h-[85vh] sm:!max-w-2xl'
     >

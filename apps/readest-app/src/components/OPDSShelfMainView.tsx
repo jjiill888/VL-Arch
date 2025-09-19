@@ -275,17 +275,17 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
   );
 
   // Navigation functions
-  const handleNextPage = () => {
+  const handleNextPage = useCallback(() => {
     if (currentPage < totalPages - 1) {
       setCurrentPage(currentPage + 1);
     }
-  };
+  }, [currentPage, totalPages]);
 
-  const handlePreviousPage = () => {
+  const handlePreviousPage = useCallback(() => {
     if (currentPage > 0) {
       setCurrentPage(currentPage - 1);
     }
-  };
+  }, [currentPage]);
 
   // Keyboard event handler
   useEffect(() => {
@@ -303,7 +303,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [currentPage, totalPages]);
+  }, [handleNextPage, handlePreviousPage]);
 
 
   if (error) {

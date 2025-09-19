@@ -43,7 +43,7 @@
         <string>Alternate</string>
         <key>LSItemContentTypes</key>
         <array>
-          <string>com.readest.fb2</string>
+          <string>com.vlarch.fb2</string>
         </array>
       </dict>
 
@@ -54,7 +54,7 @@
         <string>Alternate</string>
         <key>LSItemContentTypes</key>
         <array>
-          <string>com.readest.cbz</string>
+          <string>com.vlarch.cbz</string>
         </array>
       </dict>
 
@@ -118,7 +118,7 @@
 
       <dict>
         <key>UTTypeIdentifier</key>
-        <string>com.readest.fb2</string>
+        <string>com.vlarch.fb2</string>
         <key>UTTypeDescription</key>
         <string>FB2 Document</string>
         <key>UTTypeConformsTo</key>
@@ -138,7 +138,7 @@
 
       <dict>
         <key>UTTypeIdentifier</key>
-        <string>com.readest.cbz</string>
+        <string>com.vlarch.cbz</string>
         <key>UTTypeDescription</key>
         <string>CBZ Archive</string>
         <key>UTTypeConformsTo</key>

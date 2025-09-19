@@ -80,7 +80,7 @@ export abstract class BaseAppService implements AppService {
   hasHaptics = false;
   hasUpdater = false;
   hasOrientationLock = false;
-  distChannel = 'readest';
+  distChannel = 'vlarch';
 
   abstract fs: FileSystem;
 

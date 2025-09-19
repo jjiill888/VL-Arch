@@ -11,10 +11,10 @@ const iapVerificationSchema = z.object({
 });
 
 const PRODUCT_MAP: Record<string, string> = {
-  'com.bilingify.readest.monthly.plus': 'Plus',
-  'com.bilingify.readest.yearly.plus': 'Plus',
-  'com.bilingify.readest.monthly.pro': 'Pro',
-  'com.bilingify.readest.yearly.pro': 'Pro',
+  'com.vlarch.vlarch.monthly.plus': 'Plus',
+  'com.vlarch.vlarch.yearly.plus': 'Plus',
+  'com.vlarch.vlarch.monthly.pro': 'Pro',
+  'com.vlarch.vlarch.yearly.pro': 'Pro',
 };
 
 const getProductName = (productId: string) => {

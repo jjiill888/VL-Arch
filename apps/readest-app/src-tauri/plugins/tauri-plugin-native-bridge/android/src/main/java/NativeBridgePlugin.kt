@@ -1,4 +1,4 @@
-package com.readest.native_bridge
+package com.vlarch.native_bridge
 
 import android.app.Activity
 import android.content.Intent
@@ -70,7 +70,7 @@ interface KeyDownInterceptor {
 @TauriPlugin
 class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
     private val implementation = NativeBridge()
-    private var redirectScheme = "readest"
+    private var redirectScheme = "vlarch"
     private var redirectHost = "auth-callback"
 
     companion object {
@@ -90,7 +90,7 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
         val uri = intent?.data ?: return
         Log.e("NativeBridgePlugin", "Received intent: $uri")
         when {
-          uri.scheme == "readest" && uri.host == "auth-callback" -> {
+          uri.scheme == "vlarch" && uri.host == "auth-callback" -> {
               val result = JSObject().apply {
                   put("redirectUrl", uri.toString())
               }

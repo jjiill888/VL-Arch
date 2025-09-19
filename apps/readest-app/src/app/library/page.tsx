@@ -648,9 +648,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         setCurrentLibrary(library);
 
         // Update OPDS libraries list
-        setOpdsLibraries(opdsLibraryManager.getAllLibraries());
+        const updatedLibraries = opdsLibraryManager.getAllLibraries();
+        setOpdsLibraries(updatedLibraries);
 
-        // Navigate to the shelf view directly
+        // Navigate to shelf view to show the OPDS library
         setCurrentView('shelf');
     } catch (error) {
       console.error('Failed to create OPDS library:', error);
@@ -698,9 +699,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       setCurrentLibrary(library);
 
       // Update OPDS libraries list
-      setOpdsLibraries(opdsLibraryManager.getAllLibraries());
+      const updatedLibraries = opdsLibraryManager.getAllLibraries();
+      setOpdsLibraries(updatedLibraries);
 
-      // Navigate to the shelf view directly
+      // Navigate to shelf view to show the OPDS library
       setCurrentView('shelf');
 
       eventDispatcher.dispatch('toast', {
@@ -836,7 +838,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   return (
     <div
       ref={pageRef}
-      aria-label='Your Library'
+      aria-label='VL-Arch Library'
       className={clsx(
         'library-page bg-base-200 text-base-content flex select-none flex-col overflow-hidden min-h-0',
         appService?.isIOSApp ? 'h-[100vh]' : 'h-dvh',
@@ -917,10 +919,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             <DropIndicator />
             <div className='hero-content text-neutral-content text-center'>
               <div className='max-w-md'>
-                <h1 className='mb-5 text-5xl font-bold'>{_('Your Library')}</h1>
+                <h1 className='mb-5 text-5xl font-bold'>{_('VL-Arch Library')}</h1>
                 <p className='mb-5'>
                   {_(
-                    'Welcome to your library. You can import your books here and read them anytime.',
+                    'Welcome to VL-Arch. You can import your books here and read them anytime.',
                   )}
                 </p>
                 <button className='btn btn-primary rounded-xl' onClick={handleImportBooks}>

@@ -9,51 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 
 [[package]]
-name = "Readest"
-version = "0.2.2"
-dependencies = [
- "block",
- "cocoa",
- "futures",
- "futures-util",
- "log",
- "objc",
- "objc-foundation",
- "objc2 0.6.2",
- "objc2-authentication-services",
- "objc2-foundation 0.3.1",
- "objc_id",
- "rand 0.8.5",
- "read-progress-stream",
- "reqwest",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-cli",
- "tauri-plugin-deep-link",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-haptics",
- "tauri-plugin-http",
- "tauri-plugin-log",
- "tauri-plugin-native-bridge",
- "tauri-plugin-native-tts",
- "tauri-plugin-oauth",
- "tauri-plugin-opener",
- "tauri-plugin-os",
- "tauri-plugin-process",
- "tauri-plugin-shell",
- "tauri-plugin-sign-in-with-apple",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "tauri-plugin-window-state",
- "thiserror 2.0.15",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6473,6 +6428,51 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vl-arch"
+version = "0.2.2"
+dependencies = [
+ "block",
+ "cocoa",
+ "futures",
+ "futures-util",
+ "log",
+ "objc",
+ "objc-foundation",
+ "objc2 0.6.2",
+ "objc2-authentication-services",
+ "objc2-foundation 0.3.1",
+ "objc_id",
+ "rand 0.8.5",
+ "read-progress-stream",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-cli",
+ "tauri-plugin-deep-link",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-haptics",
+ "tauri-plugin-http",
+ "tauri-plugin-log",
+ "tauri-plugin-native-bridge",
+ "tauri-plugin-native-tts",
+ "tauri-plugin-oauth",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-process",
+ "tauri-plugin-shell",
+ "tauri-plugin-sign-in-with-apple",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "tauri-plugin-window-state",
+ "thiserror 2.0.15",
+ "tokio",
+ "tokio-util",
+]
 
 [[package]]
 name = "vswhom"

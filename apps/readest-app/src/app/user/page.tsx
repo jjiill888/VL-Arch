@@ -278,8 +278,8 @@ const ProfilePage = () => {
         .initialize()
         .then(() =>
           iapService.fetchProducts([
-            'com.bilingify.readest.monthly.plus',
-            'com.bilingify.readest.monthly.pro',
+            'com.vlarch.vlarch.monthly.plus',
+            'com.vlarch.vlarch.monthly.pro',
           ]),
         )
         .then((products: IAPProduct[]) => {

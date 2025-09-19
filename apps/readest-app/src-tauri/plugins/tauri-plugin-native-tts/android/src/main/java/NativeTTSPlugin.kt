@@ -1,4 +1,4 @@
-package com.readest.native_tts
+package com.vlarch.native_tts
 
 import android.os.Bundle
 import android.app.Activity

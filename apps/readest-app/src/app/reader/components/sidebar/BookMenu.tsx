@@ -12,7 +12,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useParallelViewStore } from '@/store/parallelViewStore';
 import { isWebAppPlatform } from '@/services/environment';
 import { eventDispatcher } from '@/utils/event';
-import { DOWNLOAD_READEST_URL } from '@/services/constants';
+import { DOWNLOAD_VLARCH_URL } from '@/services/constants';
 import { setKOSyncSettingsWindowVisible } from '@/app/reader/components/KOSyncSettings';
 import useBooksManager from '../../hooks/useBooksManager';
 import MenuItem from '@/components/MenuItem';
@@ -47,7 +47,7 @@ const BookMenu: React.FC<BookMenuProps> = ({ menuClassName, setIsDropdownOpen })
     setIsDropdownOpen?.(false);
   };
   const downloadReadest = () => {
-    window.open(DOWNLOAD_READEST_URL, '_blank');
+    window.open(DOWNLOAD_VLARCH_URL, '_blank');
     setIsDropdownOpen?.(false);
   };
   const handleExportAnnotations = () => {

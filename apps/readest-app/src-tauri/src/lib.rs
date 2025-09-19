@@ -260,7 +260,7 @@ pub fn run() {
                     .decorations(false)
                     .visible(false)
                     .shadow(true)
-                    .title("Readest");
+                    .title("VL-Arch");
 
                 #[cfg(target_os = "windows")]
                 {

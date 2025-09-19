@@ -1,11 +1,11 @@
 {
-  "name": "@readest/monorepo",
+  "name": "@vl-arch/monorepo",
   "private": true,
-  "repository": "readest/readest",
+  "repository": "vl-arch/vl-arch",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "tauri": "pnpm --filter @readest/readest-app tauri",
-    "dev-web": "pnpm --filter @readest/readest-app dev-web"
+    "tauri": "pnpm --filter @vl-arch/vl-arch-app tauri",
+    "dev-web": "pnpm --filter @vl-arch/vl-arch-app dev-web"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

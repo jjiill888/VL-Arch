@@ -82,7 +82,7 @@ export const AboutWindow = () => {
     <Dialog
       id='about_window'
       isOpen={isOpen}
-      title={_('About Readest')}
+      title={_('About VL-Arch')}
       onClose={handleClose}
       boxClassName='sm:!w-[480px] sm:!max-w-screen-sm sm:h-auto'
     >
@@ -141,7 +141,7 @@ export const AboutWindow = () => {
             </p>
             <p className='text-neutral-content text-xs'>
               Source code is available at{' '}
-              <Link href='https://github.com/readest/readest' className='text-blue-500 underline'>
+              <Link href='https://github.com/vl-arch/vl-arch' className='text-blue-500 underline'>
                 GitHub
               </Link>
               .

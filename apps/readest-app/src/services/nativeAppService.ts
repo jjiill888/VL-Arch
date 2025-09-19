@@ -114,7 +114,7 @@ export const nativeFileSystem: FileSystem = {
     if (!isTauriAvailable()) {
       // Return a fallback path when Tauri is not ready
       console.debug('Tauri not available, using fallback path for base:', base);
-      return `/tmp/readest-fallback/${base.toLowerCase()}`;
+      return `/tmp/vlarch-fallback/${base.toLowerCase()}`;
     }
     const { basePrefix, fp } = resolvePath('', base);
     const basePath = await basePrefix();
@@ -306,7 +306,7 @@ export class NativeAppService extends BaseAppService {
   // orientation lock is not supported on iPad
   override hasOrientationLock =
     (OS_TYPE === 'ios' && getOSPlatform() === 'ios') || OS_TYPE === 'android';
-  override distChannel = process.env['NEXT_PUBLIC_DIST_CHANNEL'] || 'readest';
+  override distChannel = process.env['NEXT_PUBLIC_DIST_CHANNEL'] || 'vlarch';
 
   /**
    * Initialize the service with proper OS type detection from Tauri

@@ -8,7 +8,7 @@ import { BiMoon, BiSun } from 'react-icons/bi';
 
 import { setAboutDialogVisible } from '@/components/AboutWindow';
 import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
-import { DOWNLOAD_READEST_URL } from '@/services/constants';
+import { DOWNLOAD_VLARCH_URL } from '@/services/constants';
 import { useAuth } from '@/context/AuthContext';
 import { useEnv } from '@/context/EnvContext';
 import { useThemeStore } from '@/store/themeStore';
@@ -54,7 +54,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
   };
 
   const downloadReadest = () => {
-    window.open(DOWNLOAD_READEST_URL, '_blank');
+    window.open(DOWNLOAD_VLARCH_URL, '_blank');
     setIsDropdownOpen?.(false);
   };
 

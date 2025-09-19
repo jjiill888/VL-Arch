@@ -338,6 +338,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({
 
   const selectedBooks = getSelectedBooks();
 
+  console.log('Bookshelf rendering with OPDS libraries:', opdsLibraries);
+  
   return (
     <div className='bookshelf'>
       {opdsLibraries.length > 0 && (

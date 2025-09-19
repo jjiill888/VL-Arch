@@ -1,4 +1,4 @@
-package com.readest.native_bridge
+package com.vlarch.native_bridge
 
 import org.junit.Test
 

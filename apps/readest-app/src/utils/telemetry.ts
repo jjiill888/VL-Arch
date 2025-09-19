@@ -1,6 +1,6 @@
 import posthog from 'posthog-js';
 
-export const TELEMETRY_OPT_OUT_KEY = 'readest-telemetry-opt-out';
+export const TELEMETRY_OPT_OUT_KEY = 'vlarch-telemetry-opt-out';
 
 export const hasOptedOutTelemetry = () => {
   return localStorage.getItem(TELEMETRY_OPT_OUT_KEY) === 'true';

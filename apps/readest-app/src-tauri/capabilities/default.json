@@ -18,7 +18,7 @@
       "identifier": "fs:scope-appdata-recursive",
       "allow": [
         {
-          "path": "$APPDATA/Readest/**/*"
+          "path": "$APPDATA/VL-Arch/**/*"
         }
       ],
       "deny": []
@@ -65,10 +65,10 @@
       "identifier": "http:default",
       "allow": [
         {
-          "url": "https://*.readest.com"
+          "url": "https://*.vlarch.com"
         },
         {
-          "url": "https://github.com/readest/*"
+          "url": "https://github.com/vl-arch/*"
         },
         {
           "url": "https://*.deepl.com"

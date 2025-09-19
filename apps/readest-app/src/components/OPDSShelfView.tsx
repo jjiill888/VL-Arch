@@ -334,23 +334,6 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
     return `${authors[0] || ''} & ${authors.length - 1} ${_('其他')}`;
   };
 
-  const cleanSummary = (summary: string): string => {
-    if (!summary) return '';
-    
-    // Remove HTML tags
-    const withoutHtml = summary.replace(/<[^>]*>/g, '');
-    
-    // Decode HTML entities
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = withoutHtml;
-    const decoded = tempDiv.textContent || tempDiv.innerText || '';
-    
-    // Remove extra whitespace and limit length
-    const cleaned = decoded.replace(/\s+/g, ' ').trim();
-    
-    // Limit to 200 characters
-    return cleaned.length > 200 ? cleaned.substring(0, 200) + '...' : cleaned;
-  };
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B';

@@ -15,9 +15,9 @@ import { UserStorageQuota, UserDailyTranslationQuota } from '@/types/user';
 import { getDefaultMaxBlockSize, getDefaultMaxInlineSize } from '@/utils/config';
 import { stubTranslation as _ } from '@/utils/misc';
 
-export const LOCAL_BOOKS_SUBDIR = 'Readest/Books';
-export const CLOUD_BOOKS_SUBDIR = 'Readest/Books';
-export const LOCAL_FONTS_SUBDIR = 'Readest/Fonts';
+export const LOCAL_BOOKS_SUBDIR = 'VL-Arch/Books';
+export const CLOUD_BOOKS_SUBDIR = 'VL-Arch/Books';
+export const LOCAL_FONTS_SUBDIR = 'VL-Arch/Fonts';
 
 export const SUPPORTED_BOOK_EXTS = [
   'epub',
@@ -54,7 +54,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   alwaysOnTop: false,
   openBookInNewWindow: true,
   alwaysShowStatusBar: false,
-  autoCheckUpdates: true,
+  autoCheckUpdates: false,
   screenWakeLock: false,
   openLastBooks: false,
   lastOpenBooks: [],
@@ -557,16 +557,16 @@ export const CJK_FONTS_PATTENS = new RegExp(
 
 export const BOOK_IDS_SEPARATOR = '+';
 
-export const DOWNLOAD_READEST_URL = 'https://readest.com?utm_source=readest_web';
+export const DOWNLOAD_VLARCH_URL = 'https://vlarch.com?utm_source=vlarch_web';
 
-export const READEST_WEB_BASE_URL = 'https://web.readest.com';
-export const READEST_NODE_BASE_URL = 'https://node.readest.com';
+export const VLARCH_WEB_BASE_URL = 'https://web.vlarch.com';
+export const VLARCH_NODE_BASE_URL = 'https://node.vlarch.com';
 
-const LATEST_DOWNLOAD_BASE_URL = 'https://download.readest.com/releases';
+const LATEST_DOWNLOAD_BASE_URL = 'https://download.vlarch.com/releases';
 
-export const READEST_UPDATER_FILE = `${LATEST_DOWNLOAD_BASE_URL}/latest.json`;
+export const VLARCH_UPDATER_FILE = `${LATEST_DOWNLOAD_BASE_URL}/latest.json`;
 
-export const READEST_CHANGELOG_FILE = `${LATEST_DOWNLOAD_BASE_URL}/release-notes.json`;
+export const VLARCH_CHANGELOG_FILE = `${LATEST_DOWNLOAD_BASE_URL}/release-notes.json`;
 
 export const SYNC_PROGRESS_INTERVAL_SEC = 3;
 export const SYNC_NOTES_INTERVAL_SEC = 5;
