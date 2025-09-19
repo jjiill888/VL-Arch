@@ -838,7 +838,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       ref={pageRef}
       aria-label='Your Library'
       className={clsx(
-        'library-page bg-base-200 text-base-content flex select-none flex-col overflow-hidden',
+        'library-page bg-base-200 text-base-content flex select-none flex-col overflow-hidden min-h-0',
         appService?.isIOSApp ? 'h-[100vh]' : 'h-dvh',
         appService?.hasRoundedWindow && isRoundedWindow && 'window-border rounded-window',
       )}
@@ -870,7 +870,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             defer
             aria-label=''
             ref={osRef}
-            className='flex-grow'
+            className='flex-grow min-h-0 overflow-y-auto'
             options={{ scrollbars: { autoHide: 'scroll' } }}
             events={{
               initialized: (instance) => {
@@ -882,7 +882,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             }}
           >
             <div
-              className={clsx('scroll-container drop-zone flex-grow', isDragging && 'drag-over')}
+              className={clsx(
+                'scroll-container drop-zone flex-grow min-h-0 overflow-y-auto',
+                isDragging && 'drag-over',
+              )}
               style={{
                 paddingTop: '0px',
                 paddingRight: `${insets.right}px`,
@@ -928,7 +931,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           </div>
         ))}
       {currentView === 'shelf' && currentShelfId && (
-        <div className='flex-grow flex flex-col'>
+        <div className='flex-grow flex flex-col min-h-0'>
           <div className='flex items-center gap-4 p-4 bg-base-200 border-b border-base-300'>
             <button
               onClick={() => setCurrentView('home')}
@@ -941,11 +944,11 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           <OverlayScrollbarsComponent
             defer
             aria-label=''
-            className='flex-grow'
+            className='flex-grow min-h-0 overflow-y-auto'
             options={{ scrollbars: { autoHide: 'scroll' } }}
           >
             <div
-              className='scroll-container flex-grow p-4'
+              className='scroll-container flex-grow min-h-0 overflow-y-auto p-4'
               style={{
                 paddingTop: '16px',
                 paddingRight: `${insets.right + 16}px`,
