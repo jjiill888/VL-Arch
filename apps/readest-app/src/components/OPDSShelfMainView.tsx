@@ -411,29 +411,6 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
                 <MdBook className='text-secondary' />
                 {_('Available Books')}
               </h3>
-              {totalPages > 1 && (
-                <div className='flex items-center gap-2 relative z-10'>
-                  <button
-                    onClick={handlePreviousPage}
-                    disabled={currentPage === 0}
-                    className='btn btn-outline btn-sm shadow-lg'
-                  >
-                    ← {_('上一页')}
-                  </button>
-
-                  <span className='text-sm text-base-content/70 bg-base-100 px-2 py-1 rounded shadow'>
-                    {currentPage + 1} / {totalPages}
-                  </span>
-
-                  <button
-                    onClick={handleNextPage}
-                    disabled={currentPage >= totalPages - 1}
-                    className='btn btn-primary btn-sm shadow-lg'
-                  >
-                    {_('下一页')} →
-                  </button>
-                </div>
-              )}
             </div>
             <div className='max-w-7xl mx-auto'>
               <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-6 gap-6'>
