@@ -207,8 +207,9 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
         message: _('Book imported successfully: {{title}}', { title: book.title }),
         type: 'success',
       });
-      // Reload shelf data to update downloaded books
-      loadShelfData();
+      // Don't reload shelf data to avoid returning to main directory
+      // Force a re-render to update downloaded books status
+      setAvailableBooks([...availableBooks]);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to download book';
       eventDispatcher.dispatch('toast', {
