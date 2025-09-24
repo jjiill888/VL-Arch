@@ -18,7 +18,6 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { navigateToLogin, navigateToProfile } from '@/utils/nav';
 import { tauriHandleSetAlwaysOnTop, tauriHandleToggleFullScreen } from '@/utils/window';
-import { optInTelemetry, optOutTelemetry } from '@/utils/telemetry';
 import UserAvatar from '@/components/UserAvatar';
 import MenuItem from '@/components/MenuItem';
 import Quota from '@/components/Quota';
@@ -45,7 +44,6 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
   const [isAutoImportBooksOnOpen, setIsAutoImportBooksOnOpen] = useState(
     settings.autoImportBooksOnOpen,
   );
-  const [isTelemetryEnabled, setIsTelemetryEnabled] = useState(settings.telemetryEnabled);
   const iconSize = useResponsiveSize(16);
 
   const showAboutReadest = () => {
@@ -145,17 +143,6 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
     setIsOpenLastBooks(settings.openLastBooks);
   };
 
-  const toggleTelemetry = () => {
-    settings.telemetryEnabled = !settings.telemetryEnabled;
-    if (settings.telemetryEnabled) {
-      optInTelemetry();
-    } else {
-      optOutTelemetry();
-    }
-    setSettings(settings);
-    saveSettings(envConfig, settings);
-    setIsTelemetryEnabled(settings.telemetryEnabled);
-  };
 
   const handleUpgrade = () => {
     navigateToProfile(router);
@@ -269,12 +256,6 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
       )}
       {isWebAppPlatform() && <MenuItem label={_('Download Readest')} onClick={downloadReadest} />}
       <MenuItem label={_('About Readest')} onClick={showAboutReadest} />
-      <MenuItem
-        label={_('Help improve Readest')}
-        description={isTelemetryEnabled ? _('Sharing anonymized statistics') : ''}
-        toggled={isTelemetryEnabled}
-        onClick={toggleTelemetry}
-      />
     </Menu>
   );
 };

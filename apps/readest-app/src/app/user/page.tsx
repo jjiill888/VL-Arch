@@ -2,7 +2,6 @@
 
 import clsx from 'clsx';
 import Stripe from 'stripe';
-import posthog from 'posthog-js';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEnv } from '@/context/EnvContext';
@@ -130,9 +129,6 @@ const ProfilePage = () => {
     setLoading(false);
     if (!response.ok) {
       console.error('Failed to create Stripe checkout session');
-      posthog.capture('checkout_error', {
-        error: 'Failed to create Stripe checkout session',
-      });
       eventDispatcher.dispatch('toast', {
         type: 'info',
         message: _('Failed to create checkout session'),
@@ -160,15 +156,9 @@ const ProfilePage = () => {
       const result = await stripe.redirectToCheckout({ sessionId });
       if (result.error) {
         console.error(result.error);
-        posthog.capture('checkout_error', {
-          error: 'Failed to redirect to checkout',
-        });
       }
     } else {
       console.error('No sessionId or url returned from checkout API');
-      posthog.capture('checkout_error', {
-        error: 'No sessionId or url returned from checkout API',
-      });
     }
   };
 

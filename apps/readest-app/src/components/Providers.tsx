@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 import { IconContext } from 'react-icons';
 import { AuthProvider } from '@/context/AuthContext';
 import { useEnv } from '@/context/EnvContext';
-import { CSPostHogProvider } from '@/context/PHContext';
 import { SyncProvider } from '@/context/SyncContext';
 import { initSystemThemeListener, loadDataTheme } from '@/store/themeStore';
 import { useDefaultIconSize } from '@/hooks/useResponsiveSize';
@@ -41,13 +40,11 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
   if (!appService) return;
 
   return (
-    <CSPostHogProvider>
-      <AuthProvider>
-        <IconContext.Provider value={{ size: `${iconSize}px` }}>
-          <SyncProvider>{children}</SyncProvider>
-        </IconContext.Provider>
-      </AuthProvider>
-    </CSPostHogProvider>
+    <AuthProvider>
+      <IconContext.Provider value={{ size: `${iconSize}px` }}>
+        <SyncProvider>{children}</SyncProvider>
+      </IconContext.Provider>
+    </AuthProvider>
   );
 };
 

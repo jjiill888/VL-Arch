@@ -1,6 +1,5 @@
 'use client';
 
-import posthog from 'posthog-js';
 import { useEffect, useState } from 'react';
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -19,7 +18,6 @@ export default function Error({ error, reset }: ErrorPageProps) {
 
   useEffect(() => {
     setBrowserInfo(parseWebViewVersion(appService));
-    posthog.captureException(error);
     handleGlobalError(error);
   }, [appService, error]);
 
