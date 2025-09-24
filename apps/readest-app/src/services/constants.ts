@@ -159,7 +159,7 @@ export const DEFAULT_BOOK_STYLE: BookStyle = {
 
 export const DEFAULT_MOBILE_VIEW_SETTINGS: Partial<ViewSettings> = {
   fullJustification: false,
-  animated: true,
+  animated: false,
   defaultFont: 'Sans-serif',
   marginBottomPx: 16,
   disableDoubleClick: true,
