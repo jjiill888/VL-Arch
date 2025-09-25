@@ -180,7 +180,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
       />
       <hr className='border-base-200 my-1' />
       {isWebAppPlatform() && <MenuItem label={_('Download Readest')} onClick={downloadReadest} />}
-      <MenuItem label={_('About Readest')} onClick={showAboutReadest} />
+      <MenuItem label={_('About VL-Arch')} onClick={showAboutReadest} />
     </Menu>
   );
 };
