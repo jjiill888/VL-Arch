@@ -1,92 +1,60 @@
-import { jwtDecode } from 'jwt-decode';
-import { supabase } from '@/utils/supabase';
-import { UserPlan } from '@/types/user';
-import { DEFAULT_DAILY_TRANSLATION_QUOTA, DEFAULT_STORAGE_QUOTA } from '@/services/constants';
-import { isWebAppPlatform } from '@/services/environment';
-import { getDailyUsage } from '@/services/translators/utils';
-
-interface Token {
-  plan: UserPlan;
-  storage_usage_bytes: number;
-  [key: string]: string | number;
-}
-
-export const getUserPlan = (token: string): UserPlan => {
-  const data = jwtDecode<Token>(token) || {};
-  return data['plan'] || 'free';
-};
-
-export const STORAGE_QUOTA_GRACE_BYTES = 10 * 1024 * 1024; // 10 MB grace
-
-export const getStoragePlanData = (token: string) => {
-  const data = jwtDecode<Token>(token) || {};
-  const plan = data['plan'] || 'free';
-  const usage = data['storage_usage_bytes'] || 0;
-  const fixedQuota = parseInt(process.env['NEXT_PUBLIC_STORAGE_FIXED_QUOTA'] || '0');
-  const quota = fixedQuota || DEFAULT_STORAGE_QUOTA[plan] || DEFAULT_STORAGE_QUOTA['free'];
-
-  return {
-    plan,
-    usage,
-    quota,
-  };
-};
-
-export const getTranslationPlanData = (token: string) => {
-  const data = jwtDecode<Token>(token) || {};
-  const plan: UserPlan = data['plan'] || 'free';
-  const usage = getDailyUsage() || 0;
-  const quota = DEFAULT_DAILY_TRANSLATION_QUOTA[plan];
-
-  return {
-    plan,
-    usage,
-    quota,
-  };
-};
-
-export const getDailyTranslationPlanData = (token: string) => {
-  const data = jwtDecode<Token>(token) || {};
-  const plan = data['plan'] || 'free';
-  const fixedQuota = parseInt(process.env['NEXT_PUBLIC_TRANSLATION_FIXED_QUOTA'] || '0');
-  const quota =
-    fixedQuota || DEFAULT_DAILY_TRANSLATION_QUOTA[plan] || DEFAULT_DAILY_TRANSLATION_QUOTA['free'];
-
-  return {
-    plan,
-    quota,
-  };
-};
-
-export const getAccessToken = async (): Promise<string | null> => {
-  // In browser context there might be two instances of supabase one in the app route
-  // and the other in the pages route, and they might have different sessions
-  // making the access token invalid for API calls. In that case we should use localStorage.
-  if (isWebAppPlatform()) {
-    return localStorage.getItem('token') ?? null;
-  }
-  const { data } = await supabase.auth.getSession();
-  return data?.session?.access_token ?? null;
-};
+// Authentication and access control disabled
 
 export const getUserID = async (): Promise<string | null> => {
-  if (isWebAppPlatform()) {
-    const user = localStorage.getItem('user') ?? '{}';
-    return JSON.parse(user).id ?? null;
-  }
-  const { data } = await supabase.auth.getSession();
-  return data?.session?.user?.id ?? null;
+  return null;
 };
 
-export const validateUserAndToken = async (authHeader: string | null | undefined) => {
-  if (!authHeader) return {};
+export const getUserPlan = (token?: string | null): 'free' | 'plus' | 'pro' => {
+  console.log('Auth disabled, ignoring token:', token);
+  return 'free';
+};
 
-  const token = authHeader.replace('Bearer ', '');
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser(token);
+export const canAccessFeature = (feature?: string | null): boolean => {
+  console.log('Auth disabled, all features available:', feature);
+  return true; // All features available in offline mode
+};
 
-  if (error || !user) return {};
-  return { user, token };
+export const getAccessToken = (): string | null => {
+  return null;
+};
+
+export const getStoragePlanData = (token?: string | null) => {
+  console.log('Auth disabled, ignoring token:', token);
+  return {
+    usage: 0,
+    quota: 1000000000, // 1GB
+    unlimited: true,
+  };
+};
+
+export const getTranslationPlanData = (token?: string | null) => {
+  console.log('Auth disabled, ignoring token:', token);
+  return {
+    usage: 0,
+    quota: 1000,
+    unlimited: true,
+  };
+};
+
+export const validateUserAndToken = async (authHeader?: string | null) => {
+  // Authentication disabled - return dummy user/token
+  console.log('Auth disabled, ignoring header:', authHeader);
+  return {
+    user: { id: 'dummy-user' },
+    token: 'dummy-token'
+  };
+};
+
+export const createSupabaseAdminClient = () => {
+  // Supabase disabled
+  return null;
+};
+
+export const getDailyTranslationPlanData = (token?: string | null) => {
+  console.log('Auth disabled, ignoring token:', token);
+  return {
+    usage: 0,
+    quota: 1000,
+    unlimited: true,
+  };
 };

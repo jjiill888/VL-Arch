@@ -47,9 +47,7 @@ import {
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { getOSPlatform, getTargetLang, isCJKEnv, isContentURI, isValidURL } from '@/utils/misc';
 import { deserializeConfig, serializeConfig } from '@/utils/serializer';
-import { downloadFile, uploadFile, deleteFile, createProgressHandler } from '@/libs/storage';
 import { ClosableFile } from '@/utils/file';
-import { ProgressHandler } from '@/utils/transfer';
 import { TxtToEpubConverter } from '@/utils/txt';
 import { BOOK_FILE_NOT_FOUND_ERROR } from './errors';
 
@@ -308,151 +306,34 @@ export abstract class BaseAppService implements AppService {
       }
     }
     if (deleteAction === 'cloud' || deleteAction === 'both') {
-      const fps = [getRemoteBookFilename(book), getCoverFilename(book)];
+      const fps = [getRemoteBookFilename(), getCoverFilename(book)];
       for (const fp of fps) {
         console.log('Deleting uploaded file:', fp);
         const cfp = `${CLOUD_BOOKS_SUBDIR}/${fp}`;
-        try {
-          deleteFile(cfp);
-        } catch (error) {
-          console.log('Failed to delete uploaded file:', error);
-        }
+        console.log('Cloud storage disabled - skipping file deletion:', cfp);
       }
       book.uploadedAt = null;
     }
   }
 
-  async uploadFileToCloud(lfp: string, cfp: string, handleProgress: ProgressHandler, hash: string) {
-    console.log('Uploading file:', lfp, 'to', cfp);
-    const file = await this.fs.openFile(lfp, 'Books', cfp);
-    const localFullpath = `${this.localBooksDir}/${lfp}`;
-    await uploadFile(file, localFullpath, handleProgress, hash);
-    const f = file as ClosableFile;
-    if (f && f.close) {
-      await f.close();
-    }
+  async uploadFileToCloud(lfp: string, cfp: string) {
+    console.log('Cloud storage disabled - upload not available for:', lfp, 'to', cfp);
+    throw new Error('Cloud storage disabled - upload not available');
   }
 
-  async uploadBook(book: Book, onProgress?: ProgressHandler): Promise<void> {
-    let uploaded = false;
-    const completedFiles = { count: 0 };
-    let toUploadFpCount = 0;
-    const coverExist = await this.fs.exists(getCoverFilename(book), 'Books');
-    let bookFileExist = await this.fs.exists(getLocalBookFilename(book), 'Books');
-    if (coverExist) {
-      toUploadFpCount++;
-    }
-    if (bookFileExist) {
-      toUploadFpCount++;
-    }
-    if (!bookFileExist && book.url) {
-      // download the book from the URL
-      const fileobj = await this.fs.openFile(book.url, 'None');
-      await this.fs.writeFile(getLocalBookFilename(book), 'Books', await fileobj.arrayBuffer());
-      bookFileExist = true;
-    }
-
-    const handleProgress = createProgressHandler(toUploadFpCount, completedFiles, onProgress);
-
-    if (coverExist) {
-      const lfp = getCoverFilename(book);
-      const cfp = `${CLOUD_BOOKS_SUBDIR}/${getCoverFilename(book)}`;
-      await this.uploadFileToCloud(lfp, cfp, handleProgress, book.hash);
-      uploaded = true;
-      completedFiles.count++;
-    }
-
-    if (bookFileExist) {
-      const lfp = getLocalBookFilename(book);
-      const cfp = `${CLOUD_BOOKS_SUBDIR}/${getRemoteBookFilename(book)}`;
-      await this.uploadFileToCloud(lfp, cfp, handleProgress, book.hash);
-      uploaded = true;
-      completedFiles.count++;
-    }
-
-    if (uploaded) {
-      book.deletedAt = null;
-      book.updatedAt = Date.now();
-      book.uploadedAt = Date.now();
-      book.downloadedAt = Date.now();
-      book.coverDownloadedAt = Date.now();
-    } else {
-      throw new Error('Book file not uploaded');
-    }
+  async uploadBook(book: Book): Promise<void> {
+    console.log('Cloud storage disabled - book upload not available for:', book.title);
+    throw new Error('Cloud storage disabled - book upload not available');
   }
 
-  async downloadCloudFile(lfp: string, cfp: string, handleProgress: ProgressHandler) {
-    console.log('Downloading file:', cfp, 'to', lfp);
-    const localFullpath = `${this.localBooksDir}/${lfp}`;
-    const result = await downloadFile(cfp, localFullpath, handleProgress);
-    try {
-      if (this.appPlatform === 'web') {
-        const fileobj = result as Blob;
-        await this.fs.writeFile(lfp, 'Books', await fileobj.arrayBuffer());
-      }
-    } catch {
-      console.log('Failed to download file:', cfp);
-      throw new Error('Failed to download file');
-    }
+  async downloadCloudFile(lfp: string, cfp: string) {
+    console.log('Cloud storage disabled - download not available for:', cfp, 'to', lfp);
+    throw new Error('Cloud storage disabled - download not available');
   }
 
-  async downloadBook(
-    book: Book,
-    onlyCover = false,
-    redownload = false,
-    onProgress?: ProgressHandler,
-  ): Promise<void> {
-    let bookDownloaded = false;
-    let bookCoverDownloaded = false;
-    const completedFiles = { count: 0 };
-    let toDownloadFpCount = 0;
-    const needDownCover = !(await this.fs.exists(getCoverFilename(book), 'Books')) || redownload;
-    const needDownBook =
-      (!onlyCover && !(await this.fs.exists(getLocalBookFilename(book), 'Books'))) || redownload;
-    if (needDownCover) {
-      toDownloadFpCount++;
-    }
-    if (needDownBook) {
-      toDownloadFpCount++;
-    }
-
-    const handleProgress = createProgressHandler(toDownloadFpCount, completedFiles, onProgress);
-
-    if (!(await this.fs.exists(getDir(book), 'Books'))) {
-      await this.fs.createDir(getDir(book), 'Books');
-    }
-
-    try {
-      if (needDownCover) {
-        const lfp = getCoverFilename(book);
-        const cfp = `${CLOUD_BOOKS_SUBDIR}/${lfp}`;
-        await this.downloadCloudFile(lfp, cfp, handleProgress);
-        bookCoverDownloaded = true;
-      }
-    } catch (error) {
-      // don't throw error here since some books may not have cover images at all
-      console.log(`Failed to download cover file for book: '${book.title}'`, error);
-    } finally {
-      if (needDownCover) {
-        completedFiles.count++;
-      }
-    }
-
-    if (needDownBook) {
-      const lfp = getLocalBookFilename(book);
-      const cfp = `${CLOUD_BOOKS_SUBDIR}/${getRemoteBookFilename(book)}`;
-      await this.downloadCloudFile(lfp, cfp, handleProgress);
-      const localFullpath = `${this.localBooksDir}/${lfp}`;
-      bookDownloaded = await this.fs.exists(localFullpath, 'Books');
-      completedFiles.count++;
-    }
-    // some books may not have cover image, so we need to check if the book is downloaded
-    if (bookDownloaded || (!onlyCover && !needDownBook)) {
-      book.downloadedAt = Date.now();
-    }
-    if ((bookCoverDownloaded || !needDownCover) && !book.coverDownloadedAt) {
-      book.coverDownloadedAt = Date.now();
-    }
+  async downloadBook(book: Book): Promise<void> {
+    console.log('Cloud storage disabled - book download not available for:', book.title);
+    throw new Error('Cloud storage disabled - book download not available');
   }
 
   async isBookAvailable(book: Book): Promise<boolean> {
