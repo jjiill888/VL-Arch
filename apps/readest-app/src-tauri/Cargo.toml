@@ -1,6 +1,6 @@
 [package]
 name = "vl-arch"
-version = "0.2.2"
+version = "25.9.1"
 description = "VL-Arch - Your online library"
 authors = ["VL-Arch Team"]
 license = ""
