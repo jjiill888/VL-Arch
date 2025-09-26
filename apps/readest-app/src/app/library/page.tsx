@@ -365,11 +365,13 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     const loadingTimeout = setTimeout(() => setLoading(true), 300);
     const initLibrary = async () => {
       const appService = await envConfig.getAppService();
-      const settings = await appService.loadSettings();
-      setSettings(settings);
+      const [settings, fetchedLibrary] = await Promise.all([
+        appService.loadSettings(),
+        libraryBooks.length > 0 ? Promise.resolve(libraryBooks) : appService.loadLibraryBooks(),
+      ]);
 
-      // Reuse the library from the store when we return from the reader
-      const library = libraryBooks.length > 0 ? libraryBooks : await appService.loadLibraryBooks();
+    const library = libraryBooks.length > 0 ? libraryBooks : fetchedLibrary;
+      setSettings(settings);
       let opened = false;
       if (checkOpenWithBooks) {
         opened = await handleOpenWithBooks(appService, library);

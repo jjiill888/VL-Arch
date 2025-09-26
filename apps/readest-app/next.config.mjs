@@ -40,6 +40,9 @@ const nextConfig = {
       ]
     : [],
   async headers() {
+    // Headers are not supported in export mode
+    if (exportOutput) return [];
+
     return [
       {
         source: '/.well-known/apple-app-site-association',
