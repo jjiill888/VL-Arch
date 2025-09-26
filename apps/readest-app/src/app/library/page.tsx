@@ -362,7 +362,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       }
     };
 
-    const loadingTimeout = setTimeout(() => setLoading(true), 300);
+    const loadingTimeout = setTimeout(() => setLoading(true), 200);
     const initLibrary = async () => {
       const appService = await envConfig.getAppService();
       const [settings, fetchedLibrary] = await Promise.all([
@@ -898,7 +898,9 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   };
 
   const shouldShowSkeleton =
-    !appServiceReady || !appService || !insets || checkOpenWithBooks || checkLastOpenBooks;
+    !appServiceReady || !appService || !insets;
+
+  const isInitializing = checkOpenWithBooks || checkLastOpenBooks;
 
   if (shouldShowSkeleton) {
     return (
@@ -942,8 +944,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           onDeselectAll={handleDeselectAll}
         />
       </div>
-      {loading && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center'>
+      {(loading || isInitializing) && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-base-200/80 backdrop-blur-sm'>
           <Spinner loading />
         </div>
       )}
