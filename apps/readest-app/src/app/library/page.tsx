@@ -67,7 +67,7 @@ const LibraryPageWithSearchParams = () => {
 
 const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchParams | null }) => {
   const router = useRouter();
-  const { envConfig, appService } = useEnv();
+  const { envConfig, appService, appServiceReady } = useEnv();
   const { token, user } = useAuth();
   const {
     library: libraryBooks,
@@ -831,8 +831,21 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     setShowDetailsBook(book);
   };
 
-  if (!appService || !insets || checkOpenWithBooks || checkLastOpenBooks) {
-    return <div className={clsx('h-[100vh]', !appService?.isLinuxApp && 'bg-base-200')} />;
+  const shouldShowSkeleton =
+    !appServiceReady || !appService || !insets || checkOpenWithBooks || checkLastOpenBooks;
+
+  if (shouldShowSkeleton) {
+    return (
+      <div
+        className={clsx(
+          'flex h-[100vh] w-full items-center justify-center',
+          !appService?.isLinuxApp && 'bg-base-200',
+        )}
+      >
+        <span className='loading loading-dots loading-lg'></span>
+        <span className='sr-only'>{_('Loading...')}</span>
+      </div>
+    );
   }
 
   const showBookshelf = libraryLoaded || libraryBooks.length > 0;
