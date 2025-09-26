@@ -424,6 +424,72 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoBooks, libraryLoaded]);
 
+  useEffect(() => {
+    if (!appService || libraryBooks.length === 0) return;
+
+    const booksWithoutCovers = libraryBooks.filter(
+      (book) => !book.coverImageUrl && !book.metadata?.coverImageUrl,
+    );
+
+    if (booksWithoutCovers.length === 0) return;
+
+    let isCancelled = false;
+
+    const fetchCoverImages = async () => {
+      const results = await Promise.allSettled(
+        booksWithoutCovers.map(async (book) => ({
+          hash: book.hash,
+          coverImageUrl: await appService.generateCoverImageUrl(book),
+        })),
+      );
+
+      if (isCancelled) return;
+
+      const coverUpdates = new Map<string, string>();
+
+      results.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value.coverImageUrl) {
+          coverUpdates.set(result.value.hash, result.value.coverImageUrl);
+        } else if (result.status === 'rejected') {
+          console.warn('Failed to generate cover image:', result.reason);
+        }
+      });
+
+      if (coverUpdates.size === 0) {
+        return;
+      }
+
+      const currentLibrary = useLibraryStore.getState().library;
+      let hasChanges = false;
+      const updatedLibrary = currentLibrary.map((book) => {
+        const coverImageUrl = coverUpdates.get(book.hash);
+        if (!coverImageUrl || book.coverImageUrl === coverImageUrl) {
+          return book;
+        }
+        hasChanges = true;
+        return { ...book, coverImageUrl };
+      });
+
+      if (!hasChanges) {
+        return;
+      }
+
+      setLibrary(updatedLibrary);
+
+      try {
+        await appService.saveLibraryBooks(updatedLibrary);
+      } catch (error) {
+        console.error('Failed to persist library cover updates:', error);
+      }
+    };
+
+    fetchCoverImages();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [appService, libraryBooks, setLibrary]);
+
   const importBooks = async (files: SelectedFile[]) => {
     setLoading(true);
     const failedFiles = [];

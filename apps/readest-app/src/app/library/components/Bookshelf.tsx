@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MdDelete, MdOpenInNew, MdOutlineCancel, MdInfoOutline } from 'react-icons/md';
 import { LuFolderPlus } from 'react-icons/lu';
 import { PiPlus } from 'react-icons/pi';
@@ -41,6 +41,12 @@ interface BookshelfProps {
   onOpenOPDSLibrary?: (library: OPDSLibrary) => void;
   onDeleteOPDSLibrary?: (library: OPDSLibrary) => void;
 }
+
+const BOOK_COVER_PLACEHOLDER =
+  'data:image/svg+xml;utf8,' +
+  '%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20300%22%3E' +
+  '%3Crect%20width%3D%22200%22%20height%3D%22300%22%20fill%3D%22%23E5E7EB%22%2F%3E' +
+  '%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20fill%3D%22%239CA3AF%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENo%20Cover%3C%2Ftext%3E%3C%2Fsvg%3E';
 
 const Bookshelf: React.FC<BookshelfProps> = ({
   libraryBooks,
@@ -84,7 +90,20 @@ const Bookshelf: React.FC<BookshelfProps> = ({
 
   const { setCurrentBookshelf, setLibrary } = useLibraryStore();
   const { setSelectedBooks, getSelectedBooks, toggleSelectedBook } = useLibraryStore();
-  const allBookshelfItems = generateBookshelfItems(libraryBooks);
+  const displayedLibraryBooks = useMemo(
+    () =>
+      libraryBooks.map((book) =>
+        book.coverImageUrl || book.metadata?.coverImageUrl
+          ? book
+          : { ...book, coverImageUrl: BOOK_COVER_PLACEHOLDER },
+      ),
+    [libraryBooks],
+  );
+
+  const allBookshelfItems = useMemo(
+    () => generateBookshelfItems(displayedLibraryBooks),
+    [displayedLibraryBooks],
+  );
 
   const autofocusRef = useAutoFocus<HTMLDivElement>();
 
@@ -114,7 +133,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
       setCurrentBookshelf(allBookshelfItems);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [libraryBooks, navBooksGroup]);
+  }, [allBookshelfItems, navBooksGroup]);
 
   useEffect(() => {
     const group = searchParams?.get('group') || '';
@@ -175,7 +194,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
       navigateToLibrary(router, `${params.toString()}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, libraryBooks, showGroupingModal]);
+  }, [searchParams, allBookshelfItems, showGroupingModal]);
 
   const toggleSelection = useCallback((id: string) => {
     toggleSelectedBook(id);

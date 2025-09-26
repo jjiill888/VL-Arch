@@ -481,15 +481,10 @@ export abstract class BaseAppService implements AppService {
       }
     }
 
-    await Promise.all(
-      books.map(async (book) => {
-        book.coverImageUrl = await this.generateCoverImageUrl(book);
-        book.updatedAt ??= book.lastUpdated || Date.now();
-        return book;
-      }),
-    );
-
-    return books;
+    return books.map((book) => ({
+      ...book,
+      updatedAt: book.updatedAt ?? book.lastUpdated ?? Date.now(),
+    }));
   }
 
   async saveLibraryBooks(books: Book[]): Promise<void> {
