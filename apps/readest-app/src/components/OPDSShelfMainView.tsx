@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MdDownload, MdInfo, MdRefresh, MdBook, MdFolder, MdArrowForward } from 'react-icons/md';
 import { useTranslation } from '@/hooks/useTranslation';
 import { eventDispatcher } from '@/utils/event';
@@ -12,7 +12,6 @@ import {
   OPDSLibraryShelf,
   OPDSLibrary
 } from '@/services/opds';
-import { LibrarySortByType } from '@/types/settings';
 
 interface OPDSShelfMainViewProps {
   shelfId: string;
@@ -28,20 +27,19 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
   const [shelf, setShelf] = useState<OPDSLibraryShelf | null>(null);
   const [library, setLibrary] = useState<OPDSLibrary | null>(null);
-  const [, setCurrentFeed] = useState<OPDSFeed | null>(null);
-  const [, setCurrentUrl] = useState<string>('');
+  const [currentFeed, setCurrentFeed] = useState<OPDSFeed | null>(null);
   const [navigationItems, setNavigationItems] = useState<OPDSNavigationItem[]>([]);
   const [availableBooks, setAvailableBooks] = useState<OPDSBook[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [downloadingBooks, setDownloadingBooks] = useState<Set<string>>(new Set());
-  const [sortBy] = useState<LibrarySortByType>('created'); // Default to "Recently Added"
-  const [isAscending] = useState(false); // Default to descending (newest first)
   const [breadcrumbs, setBreadcrumbs] = useState<Array<{title: string, url: string}>>([]);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(0);
-  const booksPerPage = 12;
+  // OPDS Standard Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [hasPrevPage, setHasPrevPage] = useState(false);
+  const [loadingPage, setLoadingPage] = useState(false);
 
   const loadShelfData = useCallback(async () => {
     const shelfData = opdsLibraryManager.getShelf(shelfId);
@@ -60,14 +58,13 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
     setLibrary(libraryData);
 
-    // Load root OPDS feed inline to avoid circular dependency
+    // Load first page of OPDS feed
     setLoading(true);
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeed(libraryData.url, libraryData.credentials);
+      const feed = await opdsService.fetchFeedByLink(libraryData.url, libraryData.credentials);
       setCurrentFeed(feed);
-      setCurrentUrl(libraryData.url);
 
       // Get navigation items and books from the feed
       const feedNavigation = opdsService.getNavigationItems(feed);
@@ -75,7 +72,11 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
       setNavigationItems(feedNavigation);
       setAvailableBooks(feedBooks);
-      setCurrentPage(0); // Reset to first page when loading new data
+      setCurrentPage(1); // Reset to first page when loading new data
+
+      // Set up OPDS standard pagination info
+      setHasNextPage(!!feed.nextLink);
+      setHasPrevPage(!!feed.prevLink);
 
       // Set up initial breadcrumb
       setBreadcrumbs([{ title: libraryData.name, url: libraryData.url }]);
@@ -95,9 +96,8 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeed(library.url, library.credentials);
+      const feed = await opdsService.fetchFeedByLink(library.url, library.credentials);
       setCurrentFeed(feed);
-      setCurrentUrl(library.url);
 
       // Get navigation items and books from the feed
       const feedNavigation = opdsService.getNavigationItems(feed);
@@ -105,7 +105,11 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
       setNavigationItems(feedNavigation);
       setAvailableBooks(feedBooks);
-      setCurrentPage(0); // Reset to first page when refreshing
+      setCurrentPage(1); // Reset to first page when refreshing
+
+      // Set up OPDS standard pagination info
+      setHasNextPage(!!feed.nextLink);
+      setHasPrevPage(!!feed.prevLink);
 
       // Reset to root breadcrumb
       setBreadcrumbs([{ title: library.name, url: library.url }]);
@@ -133,9 +137,8 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeed(item.href, library.credentials);
+      const feed = await opdsService.fetchFeedByLink(item.href, library.credentials);
       setCurrentFeed(feed);
-      setCurrentUrl(item.href);
 
       // Get navigation items and books from the feed
       const feedNavigation = opdsService.getNavigationItems(feed);
@@ -143,7 +146,11 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
       setNavigationItems(feedNavigation);
       setAvailableBooks(feedBooks);
-      setCurrentPage(0); // Reset to first page when navigating
+      setCurrentPage(1); // Reset to first page when navigating
+
+      // Set up OPDS standard pagination info
+      setHasNextPage(!!feed.nextLink);
+      setHasPrevPage(!!feed.prevLink);
 
       // Add to breadcrumbs
       setBreadcrumbs(prev => [...prev, { title: item.title, url: item.href }]);
@@ -169,9 +176,8 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeed(targetBreadcrumb.url, library.credentials);
+      const feed = await opdsService.fetchFeedByLink(targetBreadcrumb.url, library.credentials);
       setCurrentFeed(feed);
-      setCurrentUrl(targetBreadcrumb.url);
 
       // Get navigation items and books from the feed
       const feedNavigation = opdsService.getNavigationItems(feed);
@@ -179,7 +185,11 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
       setNavigationItems(feedNavigation);
       setAvailableBooks(feedBooks);
-      setCurrentPage(0); // Reset to first page when using breadcrumbs
+      setCurrentPage(1); // Reset to first page when using breadcrumbs
+
+      // Set up OPDS standard pagination info
+      setHasNextPage(!!feed.nextLink);
+      setHasPrevPage(!!feed.prevLink);
 
       // Trim breadcrumbs to current position
       setBreadcrumbs(breadcrumbs.slice(0, index + 1));
@@ -195,6 +205,69 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
       setLoading(false);
     }
   }, [breadcrumbs, library, opdsService]);
+
+  // Load next/previous page using OPDS standard pagination
+  const loadNextPage = useCallback(async () => {
+    if (!library || !currentFeed?.nextLink || loadingPage) return;
+
+    setLoadingPage(true);
+    setError('');
+
+    try {
+      const feed = await opdsService.fetchFeedByLink(currentFeed.nextLink!, library.credentials);
+      setCurrentFeed(feed);
+      
+      // Get books from the feed
+      const feedBooks = opdsService.getBooks(feed);
+      setAvailableBooks(feedBooks);
+      setCurrentPage(prev => prev + 1);
+
+      // Update OPDS standard pagination info
+      setHasNextPage(!!feed.nextLink);
+      setHasPrevPage(!!feed.prevLink);
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load next page';
+      setError(errorMessage);
+      eventDispatcher.dispatch('toast', {
+        message: errorMessage,
+        type: 'error',
+      });
+    } finally {
+      setLoadingPage(false);
+    }
+  }, [library, currentFeed, opdsService, loadingPage, _]);
+
+  const loadPrevPage = useCallback(async () => {
+    if (!library || !currentFeed?.prevLink || loadingPage) return;
+
+    setLoadingPage(true);
+    setError('');
+
+    try {
+      const feed = await opdsService.fetchFeedByLink(currentFeed.prevLink!, library.credentials);
+      setCurrentFeed(feed);
+      
+      // Get books from the feed
+      const feedBooks = opdsService.getBooks(feed);
+      setAvailableBooks(feedBooks);
+      setCurrentPage(prev => prev - 1);
+
+      // Update OPDS standard pagination info
+      setHasNextPage(!!feed.nextLink);
+      setHasPrevPage(!!feed.prevLink);
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load previous page';
+      setError(errorMessage);
+      eventDispatcher.dispatch('toast', {
+        message: errorMessage,
+        type: 'error',
+      });
+    } finally {
+      setLoadingPage(false);
+    }
+  }, [library, currentFeed, opdsService, loadingPage, _]);
 
   const handleBookDownload = async (book: OPDSBook) => {
     if (downloadingBooks.has(book.id)) return;
@@ -231,62 +304,14 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     }
   }, [shelfId, loadShelfData]);
 
-
-  // Sort available books
-  const sortedAvailableBooks = useMemo(() => {
-    return [...availableBooks].sort((a, b) => {
-      let aValue: string | number, bValue: string | number;
-
-      switch (sortBy) {
-        case 'title':
-          aValue = a.title?.toLowerCase() || '';
-          bValue = b.title?.toLowerCase() || '';
-          break;
-        case 'author':
-          aValue = a.authors?.[0]?.toLowerCase() || '';
-          bValue = b.authors?.[0]?.toLowerCase() || '';
-          break;
-        case 'created':
-        case 'updated':
-          // For OPDS books, use published date or fall back to title
-          aValue = a.published ? new Date(a.published).getTime() : a.title?.toLowerCase() || '';
-          bValue = b.published ? new Date(b.published).getTime() : b.title?.toLowerCase() || '';
-          break;
-        case 'format':
-          // Use the first download link's format
-          aValue = a.downloadLinks?.[0]?.type?.toLowerCase() || '';
-          bValue = b.downloadLinks?.[0]?.type?.toLowerCase() || '';
-          break;
-        default:
-          aValue = a.published ? new Date(a.published).getTime() : 0;
-          bValue = b.published ? new Date(b.published).getTime() : 0;
-      }
-
-      if (aValue < bValue) return isAscending ? -1 : 1;
-      if (aValue > bValue) return isAscending ? 1 : -1;
-      return 0;
-    });
-  }, [availableBooks, sortBy, isAscending]);
-
-  // Get current page books
-  const totalPages = Math.ceil(sortedAvailableBooks.length / booksPerPage);
-  const currentPageBooks = sortedAvailableBooks.slice(
-    currentPage * booksPerPage,
-    (currentPage + 1) * booksPerPage
-  );
-
-  // Navigation functions
+  // OPDS Standard pagination navigation functions
   const handleNextPage = useCallback(() => {
-    if (currentPage < totalPages - 1) {
-      setCurrentPage(currentPage + 1);
-    }
-  }, [currentPage, totalPages]);
+    loadNextPage();
+  }, [loadNextPage]);
 
   const handlePreviousPage = useCallback(() => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
-    }
-  }, [currentPage]);
+    loadPrevPage();
+  }, [loadPrevPage]);
 
   // Keyboard event handler
   useEffect(() => {
@@ -368,11 +393,11 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
         {/* Statistics and pagination info */}
         <div className='flex flex-wrap items-center gap-3 text-xs text-base-content/70'>
           <div className='flex items-center gap-1'>
-            <span className='font-medium'>{sortedAvailableBooks.length}</span>
-            <span>{_('available books')}</span>
+            <span className='font-medium'>{availableBooks.length}</span>
+            <span>{_('books on this page')}</span>
           </div>
           <div className='flex items-center gap-1'>
-            <span className='font-medium'>{sortedAvailableBooks.filter(book => opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book)).length}</span>
+            <span className='font-medium'>{availableBooks.filter(book => opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book)).length}</span>
             <span>{_('downloaded')}</span>
           </div>
           {navigationItems.length > 0 && (
@@ -381,12 +406,9 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
               <span>{_('categories')}</span>
             </div>
           )}
-          {totalPages > 1 && (
-            <div className='flex items-center gap-1'>
-              <span className='font-medium'>{currentPage + 1} / {totalPages}</span>
-              <span>{_('pages')}</span>
-            </div>
-          )}
+          <div className='flex items-center gap-1'>
+            <span className='font-medium'>{_('Page')} {currentPage}</span>
+          </div>
         </div>
       </div>
 
@@ -422,17 +444,23 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
 
 
         {/* Available books */}
-        {currentPageBooks.length > 0 && (
+        {availableBooks.length > 0 && (
           <div className='mb-4'>
             <div className='flex items-center justify-between mb-3'>
               <h3 className='text-base font-semibold flex items-center gap-2'>
                 <MdBook className='text-secondary' />
                 {_('Available Books')}
               </h3>
+              {loadingPage && (
+                <div className='flex items-center gap-2 text-sm text-base-content/70'>
+                  <Spinner loading />
+                  <span>{_('Loading page...')}</span>
+                </div>
+              )}
             </div>
             <div className='max-w-7xl mx-auto'>
               <div className='grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3'>
-              {currentPageBooks.map((book) => {
+              {availableBooks.map((book) => {
                 const isDownloaded = opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book);
                 const isDownloading = downloadingBooks.has(book.id);
 
@@ -476,24 +504,23 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
             </div>
 
             {/* Bottom pagination controls */}
-            {totalPages > 1 && (
+            {(hasNextPage || hasPrevPage) && (
               <div className='mt-4 pt-4 border-t border-base-300 flex items-center justify-center gap-3'>
                 <button
                   onClick={handlePreviousPage}
-                  disabled={currentPage === 0}
+                  disabled={!hasPrevPage || loadingPage}
                   className='btn btn-outline btn-sm shadow-lg'
                 >
                   ← {_('上一页')}
                 </button>
 
                 <div className='flex items-center gap-2 text-xs text-base-content/70 bg-base-100 px-2 py-1 rounded shadow'>
-                  <span>{_('第')} {currentPage + 1} {_('页')} / {totalPages} {_('页')}</span>
-                  <span>({currentPageBooks.length} / {sortedAvailableBooks.length} {_('本书')})</span>
+                  <span>{_('第')} {currentPage} {_('页')}</span>
                 </div>
 
                 <button
                   onClick={handleNextPage}
-                  disabled={currentPage >= totalPages - 1}
+                  disabled={!hasNextPage || loadingPage}
                   className='btn btn-primary btn-sm shadow-lg'
                 >
                   {_('下一页')} →
@@ -502,7 +529,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
             )}
 
             {/* Keyboard navigation hint */}
-            {totalPages > 1 && (
+            {(hasNextPage || hasPrevPage) && (
               <div className='mt-2 text-center pb-4'>
                 <div className='text-xs text-base-content/50'>
                   {_('使用左右方向键翻页')}
@@ -513,7 +540,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
         )}
 
         {/* Empty state */}
-        {navigationItems.length === 0 && sortedAvailableBooks.length === 0 && !loading && (
+        {navigationItems.length === 0 && availableBooks.length === 0 && !loading && (
           <div className='flex flex-col items-center justify-center h-full text-center'>
             <MdBook className='text-6xl text-base-content/30 mb-4' />
             <h3 className='text-xl font-semibold mb-2'>{_('No Content')}</h3>

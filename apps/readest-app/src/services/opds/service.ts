@@ -431,6 +431,10 @@ export class OPDSService {
         })),
       }));
 
+      // Resolve pagination links
+      feed.nextLink = feed.links.find(link => link.rel === 'next')?.href;
+      feed.prevLink = feed.links.find(link => link.rel === 'previous')?.href;
+
       return feed;
     } catch (error) {
       if (error instanceof Error) {
@@ -487,8 +491,9 @@ export class OPDSService {
         };
 
         if (credentials) {
-          const auth = btoa(`${credentials.username}:${credentials.password}`);
-          headers['Authorization'] = `Basic ${auth}`;
+          const credentials_str = `${credentials.username}:${credentials.password}`;
+          const base64 = btoa(unescape(encodeURIComponent(credentials_str)));
+          headers['Authorization'] = `Basic ${base64}`;
         }
 
         response = await this.fetchWithTimeout(
@@ -508,10 +513,11 @@ export class OPDSService {
         };
 
         if (credentials) {
-          const auth = btoa(`${credentials.username}:${credentials.password}`);
+          const credentials_str = `${credentials.username}:${credentials.password}`;
+          const base64 = btoa(unescape(encodeURIComponent(credentials_str)));
           init.headers = {
             ...init.headers,
-            'Authorization': `Basic ${auth}`,
+            'Authorization': `Basic ${base64}`,
           };
         }
 
@@ -566,6 +572,10 @@ export class OPDSService {
           href: this.resolveUrl(url, link.href),
         })),
       }));
+
+      // Resolve pagination links
+      feed.nextLink = feed.links.find(link => link.rel === 'next')?.href;
+      feed.prevLink = feed.links.find(link => link.rel === 'previous')?.href;
 
       return feed;
     } catch (error) {
