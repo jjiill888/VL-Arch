@@ -5,6 +5,7 @@ import {
   OPDSNavigationItem,
 } from './types';
 import { OPDSParser } from './parser';
+import { opdsFeedCache } from './feedCache';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { isTauriAppPlatform } from '@/services/environment';
 
@@ -13,6 +14,30 @@ export class OPDSService {
 
   constructor() {
     this.parser = new OPDSParser();
+  }
+
+  /**
+   * 正确处理UTF-8字符的Base64编码函数
+   * 避免中文字符编码问题
+   */
+  private utf8ToBase64(str: string): string {
+    try {
+      // 使用TextEncoder确保正确的UTF-8编码
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(str);
+
+      // 将字节数组转换为字符串
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]!);
+      }
+
+      // 转换为Base64
+      return btoa(binary);
+    } catch {
+      // 备用方案：如果TextEncoder不可用，使用传统方法
+      return btoa(unescape(encodeURIComponent(str)));
+    }
   }
 
 
@@ -299,7 +324,7 @@ export class OPDSService {
         // Add Basic Auth if credentials provided
         if (credentials) {
           const credentials_str = `${credentials.username}:${credentials.password}`;
-          const base64 = btoa(unescape(encodeURIComponent(credentials_str)));
+          const base64 = this.utf8ToBase64(credentials_str);
           headers['Authorization'] = `Basic ${base64}`;
         }
 
@@ -469,16 +494,107 @@ export class OPDSService {
     }
   }
 
+  /**
+   * Fetch shelf data with intelligent caching strategy
+   * Prioritizes memory cache for instant navigation, falls back to network
+   */
+  public async fetchShelfByLink(
+    url: string,
+    credentials?: OPDSCredentials,
+    timeoutMs?: number,
+    forceRefresh: boolean = false,
+    parentUrl?: string,
+    breadcrumb?: Array<{ title: string; url: string }>
+  ): Promise<OPDSFeed> {
+    console.log('OPDS fetchShelfByLink called:', {
+      url,
+      hasCredentials: !!credentials,
+      isTauri: isTauriAppPlatform(),
+      forceRefresh,
+      parentUrl,
+      breadcrumbLength: breadcrumb?.length || 0
+    });
+
+    // Check shelf cache first (unless force refresh is requested)
+    if (!forceRefresh) {
+      const cached = opdsFeedCache.getShelf(url, credentials);
+
+      if (cached.data && cached.isValid) {
+        if (cached.isFresh) {
+          // Fresh cache hit - return immediately
+          console.log('⚡ Shelf cache hit (fresh):', {
+            url,
+            age: Date.now() - cached.data.lastUpdated,
+            books: cached.data.books.length,
+            navigation: cached.data.navigationItems.length
+          });
+          return cached.data.feed;
+        } else {
+          // Stale cache - return immediately but trigger background refresh
+          console.log('📦 Shelf cache hit (stale):', {
+            url,
+            age: Date.now() - cached.data.lastUpdated,
+            books: cached.data.books.length,
+            navigation: cached.data.navigationItems.length
+          });
+
+          // Trigger background refresh
+          this.refreshShelfCacheInBackground(url, credentials, timeoutMs, parentUrl, breadcrumb);
+
+          return cached.data.feed;
+        }
+      }
+    }
+
+    // Cache miss or force refresh - fetch from network
+    return this.fetchFeedByLink(url, credentials, timeoutMs, forceRefresh, parentUrl, breadcrumb);
+  }
+
   public async fetchFeedByLink(
     url: string,
     credentials?: OPDSCredentials,
-    timeoutMs?: number
+    timeoutMs?: number,
+    forceRefresh: boolean = false,
+    parentUrl?: string,
+    breadcrumb?: Array<{ title: string; url: string }>
   ): Promise<OPDSFeed> {
     console.log('OPDS fetchFeedByLink called:', {
       url,
       hasCredentials: !!credentials,
-      isTauri: isTauriAppPlatform()
+      isTauri: isTauriAppPlatform(),
+      forceRefresh
     });
+
+    // Check cache first (unless force refresh is requested)
+    if (!forceRefresh) {
+      const cached = opdsFeedCache.get(url, credentials);
+
+      if (cached.data && cached.isValid) {
+        if (cached.isFresh) {
+          // Fresh cache hit - return immediately
+          console.log('⚡ Cache hit (fresh):', {
+            url,
+            age: Date.now() - cached.data.lastUpdated,
+            books: cached.data.books.length,
+            navigation: cached.data.navigationItems.length
+          });
+          return cached.data.feed;
+        } else {
+          // Stale cache - return immediately but trigger background refresh
+          console.log('📦 Cache hit (stale):', {
+            url,
+            age: Date.now() - cached.data.lastUpdated,
+            books: cached.data.books.length,
+            navigation: cached.data.navigationItems.length
+          });
+
+          // Trigger background refresh
+          this.refreshCacheInBackground(url, credentials, timeoutMs);
+
+          return cached.data.feed;
+        }
+      }
+    }
 
     try {
       let response: Response;
@@ -492,7 +608,7 @@ export class OPDSService {
 
         if (credentials) {
           const credentials_str = `${credentials.username}:${credentials.password}`;
-          const base64 = btoa(unescape(encodeURIComponent(credentials_str)));
+          const base64 = this.utf8ToBase64(credentials_str);
           headers['Authorization'] = `Basic ${base64}`;
         }
 
@@ -514,7 +630,7 @@ export class OPDSService {
 
         if (credentials) {
           const credentials_str = `${credentials.username}:${credentials.password}`;
-          const base64 = btoa(unescape(encodeURIComponent(credentials_str)));
+          const base64 = this.utf8ToBase64(credentials_str);
           init.headers = {
             ...init.headers,
             'Authorization': `Basic ${base64}`,
@@ -577,6 +693,26 @@ export class OPDSService {
       feed.nextLink = feed.links.find(link => link.rel === 'next')?.href;
       feed.prevLink = feed.links.find(link => link.rel === 'previous')?.href;
 
+      // Extract books and navigation items for caching
+      const books = this.getBooks(feed);
+      const navigationItems = this.getNavigationItems(feed);
+
+      // Cache the feed data (both regular feed cache and shelf cache)
+      opdsFeedCache.set(url, feed, books, navigationItems, credentials);
+      
+      // Also cache as shelf data if parentUrl or breadcrumb is provided
+      if (parentUrl || breadcrumb) {
+        opdsFeedCache.setShelf(url, feed, books, navigationItems, credentials, parentUrl, breadcrumb);
+      }
+
+      console.log('✅ Feed fetched and cached:', {
+        url,
+        books: books.length,
+        navigation: navigationItems.length,
+        cacheKey: url,
+        isShelf: !!(parentUrl || breadcrumb)
+      });
+
       return feed;
     } catch (error) {
       if (error instanceof Error) {
@@ -594,6 +730,45 @@ export class OPDSService {
     }
   }
 
+  /**
+   * Background refresh for stale cache entries
+   * This method runs asynchronously and doesn't block the UI
+   */
+  private refreshCacheInBackground(
+    url: string,
+    credentials?: OPDSCredentials,
+    timeoutMs?: number
+  ): void {
+    // Run in background without awaiting
+    this.fetchFeedByLink(url, credentials, timeoutMs, true)
+      .then(() => {
+        console.log('🔄 Background cache refresh completed for:', url);
+      })
+      .catch(error => {
+        console.warn('⚠️ Background cache refresh failed for:', url, error);
+      });
+  }
+
+  /**
+   * Background refresh for stale shelf cache entries
+   * This method runs asynchronously and doesn't block the UI
+   */
+  private refreshShelfCacheInBackground(
+    url: string,
+    credentials?: OPDSCredentials,
+    timeoutMs?: number,
+    parentUrl?: string,
+    breadcrumb?: Array<{ title: string; url: string }>
+  ): void {
+    // Run in background without awaiting
+    this.fetchFeedByLink(url, credentials, timeoutMs, true, parentUrl, breadcrumb)
+      .then(() => {
+        console.log('🔄 Background shelf cache refresh completed for:', url);
+      })
+      .catch(error => {
+        console.warn('⚠️ Background shelf cache refresh failed for:', url, error);
+      });
+  }
 
   public async testPagination(url: string, credentials?: OPDSCredentials): Promise<void> {
     console.log('🔍 Testing OPDS pagination (Foliate-style) for:', url);
@@ -736,7 +911,7 @@ export class OPDSService {
         // Add Basic Auth if credentials provided
         if (credentials) {
           const credentials_str = `${credentials.username}:${credentials.password}`;
-          const base64 = btoa(unescape(encodeURIComponent(credentials_str)));
+          const base64 = this.utf8ToBase64(credentials_str);
           headers['Authorization'] = `Basic ${base64}`;
         }
 
@@ -799,6 +974,72 @@ export class OPDSService {
     }
   }
 
+  /**
+   * Navigate to parent shelf using cached data
+   * Returns immediately if cached, otherwise fetches from network
+   */
+  public async navigateToParentShelf(
+    currentUrl: string,
+    credentials?: OPDSCredentials,
+    timeoutMs?: number
+  ): Promise<OPDSFeed | null> {
+    const parentUrl = opdsFeedCache.getParentShelfUrl(currentUrl, credentials);
+    
+    if (!parentUrl) {
+      console.log('📚 No parent shelf found for:', currentUrl);
+      return null;
+    }
+
+    console.log('📚 Navigating to parent shelf:', parentUrl);
+    
+    // Get current breadcrumb and remove the last item
+    const currentBreadcrumb = opdsFeedCache.getShelfBreadcrumb(currentUrl, credentials);
+    const parentBreadcrumb = currentBreadcrumb ? currentBreadcrumb.slice(0, -1) : undefined;
+
+    return this.fetchShelfByLink(parentUrl, credentials, timeoutMs, false, undefined, parentBreadcrumb);
+  }
+
+  /**
+   * Navigate to a specific shelf using cached data
+   * Returns immediately if cached, otherwise fetches from network
+   */
+  public async navigateToShelf(
+    shelfUrl: string,
+    shelfTitle: string,
+    parentUrl: string,
+    credentials?: OPDSCredentials,
+    timeoutMs?: number,
+    currentBreadcrumb?: Array<{ title: string; url: string }>
+  ): Promise<OPDSFeed> {
+    // Build new breadcrumb
+    const newBreadcrumb = currentBreadcrumb ? 
+      [...currentBreadcrumb, { title: shelfTitle, url: shelfUrl }] :
+      [{ title: shelfTitle, url: shelfUrl }];
+
+    console.log('📚 Navigating to shelf:', {
+      shelfUrl,
+      shelfTitle,
+      parentUrl,
+      breadcrumbLength: newBreadcrumb.length
+    });
+
+    return this.fetchShelfByLink(shelfUrl, credentials, timeoutMs, false, parentUrl, newBreadcrumb);
+  }
+
+  /**
+   * Get breadcrumb for current shelf
+   */
+  public getCurrentBreadcrumb(url: string, credentials?: OPDSCredentials): Array<{ title: string; url: string }> | null {
+    return opdsFeedCache.getShelfBreadcrumb(url, credentials);
+  }
+
+  /**
+   * Check if shelf is cached and fresh
+   */
+  public isShelfCached(url: string, credentials?: OPDSCredentials): boolean {
+    return opdsFeedCache.hasShelf(url, credentials);
+  }
+
   public async downloadBook(
     book: OPDSBook,
     credentials?: OPDSCredentials
@@ -826,7 +1067,7 @@ export class OPDSService {
         // Add Basic Auth if credentials provided
         if (credentials) {
           const credentials_str = `${credentials.username}:${credentials.password}`;
-          const base64 = btoa(unescape(encodeURIComponent(credentials_str)));
+          const base64 = this.utf8ToBase64(credentials_str);
           headers['Authorization'] = `Basic ${base64}`;
         }
 

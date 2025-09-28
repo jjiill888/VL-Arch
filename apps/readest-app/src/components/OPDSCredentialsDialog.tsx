@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import Dialog from './Dialog';
+import IMEInput from './IMEInput';
 
 interface OPDSCredentialsDialogProps {
   isOpen: boolean;
@@ -21,9 +22,14 @@ const OPDSCredentialsDialog: React.FC<OPDSCredentialsDialogProps> = ({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // 如果正在进行输入法合成，暂停提交
+    if (isComposing) {
+      return;
+    }
     onSubmit(username.trim(), password);
     setUsername('');
     setPassword('');
@@ -39,6 +45,10 @@ const OPDSCredentialsDialog: React.FC<OPDSCredentialsDialogProps> = ({
     setUsername('');
     setPassword('');
     onTryWithoutAuth();
+  };
+
+  const handleCompositionStateChange = (composing: boolean) => {
+    setIsComposing(composing);
   };
 
   return (
@@ -58,11 +68,12 @@ const OPDSCredentialsDialog: React.FC<OPDSCredentialsDialogProps> = ({
           <label htmlFor="opds-username" className="block text-sm font-medium mb-2">
             {_('Username')}
           </label>
-          <input
+          <IMEInput
             id="opds-username"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            onCompositionStateChange={handleCompositionStateChange}
             placeholder={_('Enter your username')}
             className="input input-bordered w-full"
             autoComplete="username"
@@ -74,11 +85,12 @@ const OPDSCredentialsDialog: React.FC<OPDSCredentialsDialogProps> = ({
             {_('Password')}
           </label>
           <div className="relative">
-            <input
+            <IMEInput
               id="opds-password"
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onCompositionStateChange={handleCompositionStateChange}
               placeholder={_('Enter your password')}
               className="input input-bordered w-full pr-12"
               autoComplete="current-password"

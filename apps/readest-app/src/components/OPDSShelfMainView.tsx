@@ -61,12 +61,20 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
 
     setLibrary(libraryData);
 
-    // Load first page of OPDS feed
+    // Load first page of OPDS feed using shelf cache for instant access
     setLoading(true);
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeedByLink(libraryData.url, libraryData.credentials);
+      // Use fetchShelfByLink for intelligent caching
+      const feed = await opdsService.fetchShelfByLink(
+        libraryData.url, 
+        libraryData.credentials,
+        undefined, // timeout
+        false, // forceRefresh
+        undefined, // parentUrl (root level)
+        [{ title: libraryData.name, url: libraryData.url }] // initial breadcrumb
+      );
       setCurrentFeed(feed);
 
       // Get navigation items and books from the feed
@@ -99,7 +107,15 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeedByLink(library.url, library.credentials);
+      // Force refresh to get latest data from server
+      const feed = await opdsService.fetchShelfByLink(
+        library.url, 
+        library.credentials,
+        undefined, // timeout
+        true, // forceRefresh - this will bypass cache and fetch fresh data
+        undefined, // parentUrl (root level)
+        [{ title: library.name, url: library.url }] // initial breadcrumb
+      );
       setCurrentFeed(feed);
 
       // Get navigation items and books from the feed
@@ -140,7 +156,16 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeedByLink(item.href, library.credentials);
+      // Use navigateToShelf for intelligent caching with parent context
+      const currentUrl = currentFeed?.id || library.url;
+      const feed = await opdsService.navigateToShelf(
+        item.href,
+        item.title,
+        currentUrl,
+        library.credentials,
+        undefined, // timeout
+        breadcrumbs // pass current breadcrumb
+      );
       setCurrentFeed(feed);
 
       // Get navigation items and books from the feed
@@ -168,7 +193,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     } finally {
       setLoading(false);
     }
-  }, [library, opdsService]);
+  }, [library, opdsService, currentFeed, breadcrumbs]);
 
   const handleBreadcrumbClick = useCallback(async (index: number) => {
     if (!library) return;
@@ -179,7 +204,15 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeedByLink(targetBreadcrumb.url, library.credentials);
+      // Use fetchShelfByLink for intelligent caching
+      const feed = await opdsService.fetchShelfByLink(
+        targetBreadcrumb.url, 
+        library.credentials,
+        undefined, // timeout
+        false, // forceRefresh - use cache if available
+        index > 0 ? breadcrumbs[index - 1]?.url : undefined, // parentUrl
+        breadcrumbs.slice(0, index + 1) // breadcrumb up to current position
+      );
       setCurrentFeed(feed);
 
       // Get navigation items and books from the feed
@@ -217,7 +250,15 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeedByLink(currentFeed.nextLink!, library.credentials);
+      // Use fetchShelfByLink for intelligent caching
+      const feed = await opdsService.fetchShelfByLink(
+        currentFeed.nextLink!, 
+        library.credentials,
+        undefined, // timeout
+        false, // forceRefresh - use cache if available
+        currentFeed.id || library.url, // parentUrl
+        breadcrumbs // current breadcrumb
+      );
       setCurrentFeed(feed);
       
       // Get books from the feed
@@ -239,7 +280,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     } finally {
       setLoadingPage(false);
     }
-  }, [library, currentFeed, opdsService, loadingPage]);
+  }, [library, currentFeed, opdsService, loadingPage, breadcrumbs]);
 
   const loadPrevPage = useCallback(async () => {
     if (!library || !currentFeed?.prevLink || loadingPage) return;
@@ -248,7 +289,15 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     setError('');
 
     try {
-      const feed = await opdsService.fetchFeedByLink(currentFeed.prevLink!, library.credentials);
+      // Use fetchShelfByLink for intelligent caching
+      const feed = await opdsService.fetchShelfByLink(
+        currentFeed.prevLink!, 
+        library.credentials,
+        undefined, // timeout
+        false, // forceRefresh - use cache if available
+        currentFeed.id || library.url, // parentUrl
+        breadcrumbs // current breadcrumb
+      );
       setCurrentFeed(feed);
       
       // Get books from the feed
@@ -270,7 +319,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     } finally {
       setLoadingPage(false);
     }
-  }, [library, currentFeed, opdsService, loadingPage]);
+  }, [library, currentFeed, opdsService, loadingPage, breadcrumbs]);
 
   const handleBookDownload = async (book: OPDSBook) => {
     if (downloadingBooks.has(book.id)) return;

@@ -60,6 +60,15 @@ const Dialog: React.FC<DialogProps> = ({
         return true;
       }
     } else if (event.key === 'Escape') {
+      // 检查是否有元素正在进行输入法合成
+      const activeElement = document.activeElement as HTMLInputElement;
+      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+        // 检查是否有正在进行的组合输入
+        const compositionInput = document.querySelector('[data-composing="true"]');
+        if (compositionInput) {
+          return false; // 不关闭对话框，让IME继续处理
+        }
+      }
       onClose();
     }
     return false;
