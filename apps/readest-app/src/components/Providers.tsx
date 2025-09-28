@@ -10,6 +10,7 @@ import { useDefaultIconSize } from '@/hooks/useResponsiveSize';
 import { useSafeAreaInsets } from '@/hooks/useSafeAreaInsets';
 import { getLocale } from '@/utils/misc';
 import i18n from '@/i18n/i18n';
+import AndroidBackKeyProvider from './AndroidBackKeyProvider';
 
 const Providers = ({ children }: { children: React.ReactNode }) => {
   const { appService } = useEnv();
@@ -37,13 +38,15 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
   }, [appService]);
 
   return (
-    <AuthProvider>
-      <IconContext.Provider value={{ size: `${iconSize}px` }}>
-        <SyncProvider>
-          {children}
-        </SyncProvider>
-      </IconContext.Provider>
-    </AuthProvider>
+    <AndroidBackKeyProvider>
+      <AuthProvider>
+        <IconContext.Provider value={{ size: `${iconSize}px` }}>
+          <SyncProvider>
+            {children}
+          </SyncProvider>
+        </IconContext.Provider>
+      </AuthProvider>
+    </AndroidBackKeyProvider>
   );
 };
 

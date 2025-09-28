@@ -25,6 +25,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useEnv } from '@/context/EnvContext';
 import { useAuth } from '@/context/AuthContext';
 import { useThemeStore } from '@/store/themeStore';
+import { useDeviceControlStore } from '@/store/deviceStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -58,7 +59,7 @@ import OPDSUrlDialog from '@/components/OPDSUrlDialog';
 import OPDSCredentialsDialog from '@/components/OPDSCredentialsDialog';
 import OPDSLibraryView from '@/components/OPDSLibraryView';
 import OPDSShelfView from '@/components/OPDSShelfView';
-import OPDSShelfMainView from '@/components/OPDSShelfMainView';
+import OPDSShelfMainView, { OPDSShelfMainViewHandle } from '@/components/OPDSShelfMainView';
 
 const LibraryPageWithSearchParams = () => {
   const searchParams = useSearchParams();
@@ -82,6 +83,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const { selectFiles } = useFileSelector(appService, _);
   const { safeAreaInsets: insets, isRoundedWindow } = useThemeStore();
   const { settings, setSettings, saveSettings } = useSettingsStore();
+  const { acquireBackKeyInterception, releaseBackKeyInterception } = useDeviceControlStore();
   const [loading, setLoading] = useState(false);
   const isInitiating = useRef(false);
   const [libraryLoaded, setLibraryLoaded] = useState(false);
@@ -108,6 +110,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const osRef = useRef<OverlayScrollbarsComponentRef>(null);
   const containerRef: React.MutableRefObject<HTMLDivElement | null> = useRef(null);
   const pageRef = useRef<HTMLDivElement>(null);
+  const opdsShelfRef = useRef<OPDSShelfMainViewHandle>(null);
 
   useTheme({ systemUIVisible: true, appThemeColor: 'base-200' });
   useUICSS();
@@ -155,6 +158,51 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       lockScreenOrientation({ orientation: 'auto' });
     }
   }, [appService]);
+
+  const handleNativeBackKeyDown = useCallback(
+    (event: CustomEvent): boolean => {
+      if (!appService?.isAndroidApp) {
+        return false;
+      }
+
+      const detail = event.detail as { keyName?: string } | undefined;
+
+      if (detail?.keyName !== 'Back' || currentView !== 'shelf') {
+        return false;
+      }
+
+      const handledByShelf = opdsShelfRef.current?.handleBack?.() ?? false;
+
+      if (!handledByShelf) {
+        setCurrentView('home');
+        setCurrentShelfId('');
+        setCurrentLibrary(null);
+      }
+
+      return true;
+    },
+    [appService?.isAndroidApp, currentView],
+  );
+
+  useEffect(() => {
+    if (!appService?.isAndroidApp || currentView !== 'shelf') {
+      return;
+    }
+
+    acquireBackKeyInterception();
+    eventDispatcher.onSync('native-key-down', handleNativeBackKeyDown);
+
+    return () => {
+      eventDispatcher.offSync('native-key-down', handleNativeBackKeyDown);
+      releaseBackKeyInterception();
+    };
+  }, [
+    appService?.isAndroidApp,
+    currentView,
+    acquireBackKeyInterception,
+    releaseBackKeyInterception,
+    handleNativeBackKeyDown,
+  ]);
 
   const handleDropedFiles = async (files: File[] | string[]) => {
     if (files.length === 0) return;
@@ -1042,8 +1090,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
               }}
             >
               <OPDSShelfMainView
+                ref={opdsShelfRef}
                 shelfId={currentShelfId}
                 onBookDownload={handleOPDSBookDownload}
+                onBackToHome={() => setCurrentView('home')}
               />
             </div>
           </OverlayScrollbarsComponent>

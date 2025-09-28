@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { MdDownload, MdInfo, MdRefresh, MdBook } from 'react-icons/md';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useBackHandler } from '@/hooks/useBackHandler';
 import { eventDispatcher } from '@/utils/event';
 import Dialog from './Dialog';
 import Spinner from './Spinner';
@@ -78,13 +79,13 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
     loadFeed(item.href);
   };
 
-  const handleBreadcrumbClick = (index: number) => {
+  const handleBreadcrumbClick = useCallback((index: number) => {
     const targetBreadcrumb = breadcrumbs[index];
     if (targetBreadcrumb) {
       setBreadcrumbs(breadcrumbs.slice(0, index + 1));
       loadFeed(targetBreadcrumb.url, false);
     }
-  };
+  }, [breadcrumbs, loadFeed]);
 
   const handleBookDownload = async (book: OPDSBook) => {
     if (downloadingBooks.has(book.id)) return;
@@ -116,14 +117,14 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
     loadFeed(currentUrl, false);
   };
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setCurrentFeed(null);
     setBreadcrumbs([]);
     setBooks([]);
     setNavigationItems([]);
     setError('');
     onClose();
-  };
+  }, [onClose]);
 
   useEffect(() => {
     if (isOpen && initialUrl) {
@@ -131,6 +132,23 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
       loadFeed(initialUrl);
     }
   }, [isOpen, initialUrl, loadFeed]);
+
+  // Handle Android back button navigation
+  const handleBackNavigation = useCallback(() => {
+    if (breadcrumbs.length > 1) {
+      // Go back to previous breadcrumb
+      handleBreadcrumbClick(breadcrumbs.length - 2);
+    } else {
+      // Close the dialog if at root level
+      handleClose();
+    }
+  }, [breadcrumbs, handleBreadcrumbClick, handleClose]);
+
+  // Use back handler hook
+  useBackHandler({
+    enabled: isOpen,
+    onBack: handleBackNavigation,
+  });
 
   const formatAuthors = (authors: string[]): string => {
     if (authors.length === 0) return _('Unknown Author');

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { MdDownload, MdInfo, MdRefresh, MdBook, MdBookmark, MdViewList, MdGridView } from 'react-icons/md';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useBackHandler } from '@/hooks/useBackHandler';
 import { eventDispatcher } from '@/utils/event';
 import Dialog from './Dialog';
 import Spinner from './Spinner';
@@ -74,6 +75,12 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
       loadShelfData();
     }
   }, [isOpen, shelfId, loadShelfData]);
+
+  // Handle Android back button to close the dialog
+  useBackHandler({
+    enabled: isOpen,
+    onBack: onClose,
+  });
 
   const handleRefresh = async () => {
     if (!library) return;

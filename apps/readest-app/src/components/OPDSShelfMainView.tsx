@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { MdDownload, MdInfo, MdRefresh, MdBook, MdFolder, MdArrowForward } from 'react-icons/md';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useBackHandler } from '@/hooks/useBackHandler';
 import { eventDispatcher } from '@/utils/event';
 import Spinner from './Spinner';
 import {
@@ -13,15 +14,17 @@ import {
   OPDSLibrary
 } from '@/services/opds';
 
+export interface OPDSShelfMainViewHandle {
+  handleBack: () => boolean;
+}
+
 interface OPDSShelfMainViewProps {
   shelfId: string;
   onBookDownload: (book: OPDSBook) => Promise<void>;
+  onBackToHome?: () => void;
 }
-
-const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
-  shelfId,
-  onBookDownload,
-}) => {
+const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewProps>(
+  ({ shelfId, onBookDownload, onBackToHome }, ref) => {
   const _ = useTranslation();
   const [opdsService] = useState(() => new OPDSService());
 
@@ -236,7 +239,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     } finally {
       setLoadingPage(false);
     }
-  }, [library, currentFeed, opdsService, loadingPage, _]);
+  }, [library, currentFeed, opdsService, loadingPage]);
 
   const loadPrevPage = useCallback(async () => {
     if (!library || !currentFeed?.prevLink || loadingPage) return;
@@ -267,7 +270,7 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
     } finally {
       setLoadingPage(false);
     }
-  }, [library, currentFeed, opdsService, loadingPage, _]);
+  }, [library, currentFeed, opdsService, loadingPage]);
 
   const handleBookDownload = async (book: OPDSBook) => {
     if (downloadingBooks.has(book.id)) return;
@@ -303,6 +306,38 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
       loadShelfData();
     }
   }, [shelfId, loadShelfData]);
+
+  // Expose imperative handle for parent to handle back navigation
+  useImperativeHandle(ref, () => ({
+    handleBack: () => {
+      if (breadcrumbs.length > 1) {
+        const parentIndex = breadcrumbs.length - 2;
+        void handleBreadcrumbClick(parentIndex);
+        return true;
+      } else if (onBackToHome) {
+        onBackToHome();
+        return true;
+      }
+      return false;
+    },
+  }), [breadcrumbs, handleBreadcrumbClick, onBackToHome]);
+
+  // Handle Android back button navigation
+  const handleBackNavigation = useCallback(async () => {
+    if (breadcrumbs.length > 1) {
+      // Go back to previous breadcrumb
+      await handleBreadcrumbClick(breadcrumbs.length - 2);
+    } else if (onBackToHome) {
+      // Go back to app home page
+      onBackToHome();
+    }
+  }, [breadcrumbs, handleBreadcrumbClick, onBackToHome]);
+
+  // Use back handler hook
+  useBackHandler({
+    enabled: breadcrumbs.length > 1 || !!onBackToHome,
+    onBack: handleBackNavigation,
+  });
 
   // OPDS Standard pagination navigation functions
   const handleNextPage = useCallback(() => {
@@ -558,6 +593,9 @@ const OPDSShelfMainView: React.FC<OPDSShelfMainViewProps> = ({
       </div>
     </div>
   );
-};
+  },
+);
+
+OPDSShelfMainView.displayName = 'OPDSShelfMainView';
 
 export default OPDSShelfMainView;
