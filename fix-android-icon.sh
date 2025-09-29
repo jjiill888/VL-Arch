@@ -48,3 +48,4 @@ echo "如果仍有问题，请检查："
 echo "1. 确保 src-tauri/icons/icon.png 是您想要的图标"
 echo "2. 确保 Android SDK 已正确安装和配置"
 echo "3. 清理所有构建缓存后重新构建"
+

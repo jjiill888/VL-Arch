@@ -14,6 +14,40 @@ import {
   OPDSLibrary
 } from '@/services/opds';
 
+const getBookUniqueKey = (book: OPDSBook): string => {
+  if (book.id) {
+    return book.id;
+  }
+
+  const downloadKey = book.downloadLinks?.map(link => link.href).join('|');
+
+  if (downloadKey && downloadKey.length > 0) {
+    return downloadKey;
+  }
+
+  const authorsKey = book.authors.length ? book.authors.join(',') : 'unknown-authors';
+
+  return `${book.title}-${authorsKey}`;
+};
+
+const mergeUniqueBooks = (existing: OPDSBook[], incoming: OPDSBook[]): OPDSBook[] => {
+  const seen = new Set<string>();
+  const result: OPDSBook[] = [];
+
+  const addBook = (book: OPDSBook) => {
+    const key = getBookUniqueKey(book);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(book);
+    }
+  };
+
+  existing.forEach(addBook);
+  incoming.forEach(addBook);
+
+  return result;
+};
+
 export interface OPDSShelfMainViewHandle {
   handleBack: () => boolean;
 }
@@ -263,7 +297,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
       
       // Get books from the feed
       const feedBooks = opdsService.getBooks(feed);
-      setAvailableBooks(feedBooks);
+      setAvailableBooks(prev => mergeUniqueBooks(prev, feedBooks));
       setCurrentPage(prev => prev + 1);
 
       // Update OPDS standard pagination info
@@ -302,7 +336,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
       
       // Get books from the feed
       const feedBooks = opdsService.getBooks(feed);
-      setAvailableBooks(feedBooks);
+      setAvailableBooks(prev => mergeUniqueBooks(prev, feedBooks));
       setCurrentPage(prev => prev - 1);
 
       // Update OPDS standard pagination info
@@ -334,7 +368,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
       });
       // Don't reload shelf data to avoid returning to main directory
       // Force a re-render to update downloaded books status
-      setAvailableBooks([...availableBooks]);
+      setAvailableBooks(prev => [...prev]);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to download book';
       eventDispatcher.dispatch('toast', {
@@ -543,33 +577,33 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
               )}
             </div>
             <div className='max-w-7xl mx-auto'>
-              <div className='grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3'>
+              <div className='grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3'>
               {availableBooks.map((book) => {
                 const isDownloaded = opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book);
                 const isDownloading = downloadingBooks.has(book.id);
 
                 return (
-                  <div key={book.id} className='bg-base-100 rounded-lg shadow hover:shadow-lg transition-shadow p-2 h-fit'>
+                  <div key={book.id} className='bg-base-100 rounded-lg shadow hover:shadow-lg transition-shadow p-2 sm:p-3 h-fit'>
                     <div className='aspect-[28/41] bg-base-300 rounded mb-2 flex items-center justify-center'>
-                      <MdBook className='w-8 h-8 text-base-content/30' />
+                      <MdBook className='w-6 h-6 sm:w-8 sm:h-8 text-base-content/30' />
                     </div>
                     <div className='space-y-1'>
-                      <h4 className='font-semibold text-xs line-clamp-2 min-h-[2rem]' title={book.title}>
+                      <h4 className='font-semibold text-xs sm:text-sm line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem]' title={book.title}>
                         {book.title}
                       </h4>
-                      <p className='text-xs text-base-content/70 line-clamp-1'>
+                      <p className='text-xs sm:text-sm text-base-content/70 line-clamp-1'>
                         {book.authors.join(', ')}
                       </p>
                       <div className='pt-1'>
                         {isDownloaded ? (
-                          <span className='text-xs bg-success text-success-content px-2 py-1 rounded block text-center'>
+                          <span className='text-xs sm:text-sm bg-success text-success-content px-2 py-1 rounded block text-center'>
                             {_('Downloaded')}
                           </span>
                         ) : (
                           <button
                             onClick={() => handleBookDownload(book)}
                             disabled={isDownloading}
-                            className='btn btn-primary btn-xs w-full gap-1'
+                            className='btn btn-primary btn-xs sm:btn-sm w-full gap-1'
                           >
                             {isDownloading ? (
                               <Spinner loading />

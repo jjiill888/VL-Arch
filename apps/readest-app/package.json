@@ -1,6 +1,6 @@
 {
   "name": "@vl-arch/vl-arch-app",
-  "version": "25.9.1",
+  "version": "25.9.2",
   "private": true,
   "scripts": {
     "dev": "dotenv -e .env.tauri -- next dev",
