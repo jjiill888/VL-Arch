@@ -46,6 +46,9 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
   const [downloadProgress, setDownloadProgress] = useState<Map<string, DownloadProgress>>(new Map());
   const [loadingMore, setLoadingMore] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+
+  // Cover image cache (book ID -> object URL)
+  const [coverCache, setCoverCache] = useState<Map<string, string>>(new Map());
   
   // Scroll preview state
   const [isScrollPreviewMode, setIsScrollPreviewMode] = useState(false);
@@ -75,6 +78,46 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
       loadShelfData();
     }
   }, [isOpen, shelfId, loadShelfData]);
+
+  // Load cover images when books change
+  useEffect(() => {
+    let canceled = false;
+
+    async function loadCovers() {
+      if (!library || availableBooks.length === 0) return;
+
+      const newCovers = new Map(coverCache);
+
+      for (const book of availableBooks) {
+        if (!book.coverImageUrl || newCovers.has(book.id)) continue;
+
+        try {
+          const blob = await opdsService.fetchImage(book.coverImageUrl, library.credentials);
+          if (canceled) return;
+          newCovers.set(book.id, URL.createObjectURL(blob));
+        } catch (err) {
+          console.warn('加载封面失败:', book.title, err);
+        }
+      }
+
+      if (!canceled) {
+        setCoverCache(newCovers);
+      }
+    }
+
+    loadCovers();
+
+    return () => {
+      canceled = true;
+    };
+  }, [availableBooks, library, opdsService]);
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      coverCache.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   // Handle Android back button to close the dialog
   useBackHandler({
@@ -534,6 +577,7 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                       };
 
                       const uniqueKey = createUniqueKey();
+                      const coverSrc = coverCache.get(book.id);
                       return (
                         <div
                           key={uniqueKey}
@@ -545,8 +589,21 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                         {viewMode === 'grid' ? (
                           <>
                             {/* Grid Mode - Card Layout */}
-                            <div className="aspect-[28/41] bg-base-300 rounded-t-lg flex items-center justify-center">
-                              <MdBook className="w-8 h-8 text-base-content/30" />
+                            <div className="aspect-[28/41] bg-base-300 rounded-t-lg flex items-center justify-center overflow-hidden">
+                              {coverSrc ? (
+                                <img
+                                  src={coverSrc}
+                                  alt={book.title}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                  }}
+                                />
+                              ) : null}
+                              <div className={`${coverSrc ? 'hidden' : ''} flex items-center justify-center w-full h-full`}>
+                                <MdBook className="w-8 h-8 text-base-content/30" />
+                              </div>
                             </div>
                             <div className="p-2 flex-1 flex flex-col">
                               <h4 className="font-medium text-base-content text-xs line-clamp-2 mb-1 min-h-[1.5rem]">
@@ -582,8 +639,21 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                         ) : (
                           <>
                             {/* List Mode - Horizontal Layout */}
-                            <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0">
-                              <MdBook className="w-8 h-8 text-base-content/30" />
+                            <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
+                              {coverSrc ? (
+                                <img
+                                  src={coverSrc}
+                                  alt={book.title}
+                                  className="w-full h-full object-cover rounded"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                  }}
+                                />
+                              ) : null}
+                              <div className={`${coverSrc ? 'hidden' : ''} flex items-center justify-center w-full h-full`}>
+                                <MdBook className="w-8 h-8 text-base-content/30" />
+                              </div>
                             </div>
 
                             <div className="flex-1 min-w-0">

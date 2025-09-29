@@ -45,6 +45,9 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
   const [navigationItems, setNavigationItems] = useState<OPDSNavigationItem[]>([]);
   const [downloadingBooks, setDownloadingBooks] = useState<Set<string>>(new Set());
 
+  // Cover image cache (book ID -> object URL)
+  const [coverCache, setCoverCache] = useState<Map<string, string>>(new Map());
+
   const loadFeed = useCallback(async (url: string, addToBreadcrumbs: boolean = true) => {
     setLoading(true);
     setError('');
@@ -132,6 +135,46 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
       loadFeed(initialUrl);
     }
   }, [isOpen, initialUrl, loadFeed]);
+
+  // Load cover images when books change
+  useEffect(() => {
+    let canceled = false;
+
+    async function loadCovers() {
+      if (!credentials || books.length === 0) return;
+
+      const newCovers = new Map(coverCache);
+
+      for (const book of books) {
+        if (!book.coverImageUrl || newCovers.has(book.id)) continue;
+
+        try {
+          const blob = await opdsService.fetchImage(book.coverImageUrl, credentials);
+          if (canceled) return;
+          newCovers.set(book.id, URL.createObjectURL(blob));
+        } catch (err) {
+          console.warn('加载封面失败:', book.title, err);
+        }
+      }
+
+      if (!canceled) {
+        setCoverCache(newCovers);
+      }
+    }
+
+    loadCovers();
+
+    return () => {
+      canceled = true;
+    };
+  }, [books, credentials, opdsService]);
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      coverCache.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   // Handle Android back button navigation
   const handleBackNavigation = useCallback(() => {
@@ -262,15 +305,30 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
                 <div>
                   <h3 className="text-lg font-semibold mb-3">{_('Available Books')}</h3>
                   <div className="grid gap-4">
-                    {books.map((book) => (
-                      <div
-                        key={book.id}
-                        className="flex gap-3 p-3 bg-base-100 border border-base-300 rounded-lg hover:bg-base-200 transition-colors"
-                      >
-                        {/* Book Icon */}
-                        <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0">
-                          <MdBook className="w-8 h-8 text-base-content/30" />
-                        </div>
+                    {books.map((book) => {
+                      const coverSrc = coverCache.get(book.id);
+                      return (
+                        <div
+                          key={book.id}
+                          className="flex gap-3 p-3 bg-base-100 border border-base-300 rounded-lg hover:bg-base-200 transition-colors"
+                        >
+                          {/* Book Cover */}
+                          <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
+                            {coverSrc ? (
+                              <img
+                                src={coverSrc}
+                                alt={book.title}
+                                className="w-full h-full object-cover rounded"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                }}
+                              />
+                            ) : null}
+                            <div className={`${coverSrc ? 'hidden' : ''} flex items-center justify-center w-full h-full`}>
+                              <MdBook className="w-8 h-8 text-base-content/30" />
+                            </div>
+                          </div>
 
                         {/* Book Details */}
                         <div className="flex-1 min-w-0">
@@ -308,7 +366,8 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
                           </button>
                         </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
               )}

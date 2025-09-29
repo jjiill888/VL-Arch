@@ -78,6 +78,9 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
   const [hasPrevPage, setHasPrevPage] = useState(false);
   const [loadingPage, setLoadingPage] = useState(false);
 
+  // Cover image cache (book ID -> object URL)
+  const [coverCache, setCoverCache] = useState<Map<string, string>>(new Map());
+
   const loadShelfData = useCallback(async () => {
     const shelfData = opdsLibraryManager.getShelf(shelfId);
     if (!shelfData) {
@@ -390,6 +393,46 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     }
   }, [shelfId, loadShelfData]);
 
+  // Load cover images when books change
+  useEffect(() => {
+    let canceled = false;
+
+    async function loadCovers() {
+      if (!library || availableBooks.length === 0) return;
+
+      const newCovers = new Map(coverCache);
+
+      for (const book of availableBooks) {
+        if (!book.coverImageUrl || newCovers.has(book.id)) continue;
+
+        try {
+          const blob = await opdsService.fetchImage(book.coverImageUrl, library.credentials);
+          if (canceled) return;
+          newCovers.set(book.id, URL.createObjectURL(blob));
+        } catch (err) {
+          console.warn('加载封面失败:', book.title, err);
+        }
+      }
+
+      if (!canceled) {
+        setCoverCache(newCovers);
+      }
+    }
+
+    loadCovers();
+
+    return () => {
+      canceled = true;
+    };
+  }, [availableBooks, library, opdsService]);
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      coverCache.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
+
   // Expose imperative handle for parent to handle back navigation
   useImperativeHandle(ref, () => ({
     handleBack: () => {
@@ -581,11 +624,25 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
               {availableBooks.map((book) => {
                 const isDownloaded = opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book);
                 const isDownloading = downloadingBooks.has(book.id);
+                const coverSrc = coverCache.get(book.id);
 
                 return (
                   <div key={book.id} className='bg-base-100 rounded-lg shadow hover:shadow-lg transition-shadow p-2 sm:p-3 h-fit'>
-                    <div className='aspect-[28/41] bg-base-300 rounded mb-2 flex items-center justify-center'>
-                      <MdBook className='w-6 h-6 sm:w-8 sm:h-8 text-base-content/30' />
+                    <div className='aspect-[28/41] bg-base-300 rounded mb-2 flex items-center justify-center overflow-hidden'>
+                      {coverSrc ? (
+                        <img
+                          src={coverSrc}
+                          alt={book.title}
+                          className='w-full h-full object-cover rounded'
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                      ) : null}
+                      <div className={`${coverSrc ? 'hidden' : ''} flex items-center justify-center w-full h-full`}>
+                        <MdBook className='w-6 h-6 sm:w-8 sm:h-8 text-base-content/30' />
+                      </div>
                     </div>
                     <div className='space-y-1'>
                       <h4 className='font-semibold text-xs sm:text-sm line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem]' title={book.title}>

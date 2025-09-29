@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPDS封面调试工具</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .book-card { border: 1px solid #ddd; margin: 10px; padding: 15px; border-radius: 8px; }
+        .cover-image { max-width: 120px; max-height: 180px; object-fit: cover; }
+        .link-list { background: #f5f5f5; padding: 10px; margin: 5px 0; border-radius: 4px; }
+        .found-cover { background-color: #e8f5e8; border-color: #4caf50; }
+        .no-cover { background-color: #ffe8e8; border-color: #f44336; }
+        button { background: #007cba; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #005a87; }
+        .stats { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .cover-test { display: flex; gap: 15px; align-items: flex-start; }
+        .cover-test img { border: 2px solid #4caf50; border-radius: 4px; }
+        .error-img { border-color: #f44336 !important; }
+    </style>
+</head>
+<body>
+    <h1>🔍 OPDS封面调试工具</h1>
+
+    <div class="stats">
+        <h3>连接信息</h3>
+        <p><strong>OPDS URL:</strong> http://server.15110y.top:8083/opds</p>
+        <p><strong>用户名:</strong> reader01</p>
+        <p><strong>状态:</strong> <span id="connection-status">未连接</span></p>
+    </div>
+
+    <button onclick="testOPDSCovers()">🧪 测试OPDS封面</button>
+    <button onclick="clearResults()">🗑️ 清除结果</button>
+
+    <div id="results"></div>
+
+    <script>
+        async function testOPDSCovers() {
+            const OPDS_URL = 'http://server.15110y.top:8083/opds';
+            const credentials = {
+                username: 'reader01',
+                password: '123456'
+            };
+
+            const resultsDiv = document.getElementById('results');
+            const statusSpan = document.getElementById('connection-status');
+
+            statusSpan.textContent = '连接中...';
+            statusSpan.style.color = 'orange';
+
+            resultsDiv.innerHTML = '<p>正在获取OPDS数据...</p>';
+
+            try {
+                // 创建Basic Auth header
+                const auth = btoa(`${credentials.username}:${credentials.password}`);
+
+                // 获取OPDS feed
+                const response = await fetch(OPDS_URL, {
+                    headers: {
+                        'Authorization': `Basic ${auth}`,
+                        'Accept': 'application/atom+xml, application/xml, text/xml'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const xmlText = await response.text();
+                statusSpan.textContent = '已连接';
+                statusSpan.style.color = 'green';
+
+                // 解析XML
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(xmlText, 'text/xml');
+
+                // 检查解析错误
+                const parserError = doc.querySelector('parsererror');
+                if (parserError) {
+                    throw new Error(`XML解析错误: ${parserError.textContent}`);
+                }
+
+                // 查找所有entry元素
+                const entries = doc.querySelectorAll('entry');
+                let coverCount = 0;
+                let totalBooks = entries.length;
+
+                resultsDiv.innerHTML = `
+                    <div class="stats">
+                        <h3>📊 统计信息</h3>
+                        <p><strong>总书籍数:</strong> ${totalBooks}</p>
+                        <p><strong>有封面:</strong> <span id="cover-count">计算中...</span></p>
+                        <p><strong>无封面:</strong> <span id="no-cover-count">计算中...</span></p>
+                        <p><strong>封面率:</strong> <span id="cover-percentage">计算中...</span></p>
+                    </div>
+                    <div id="book-list"></div>
+                `;
+
+                const bookListDiv = document.getElementById('book-list');
+
+                // 检查每个entry的封面链接
+                for (let i = 0; i < entries.length; i++) {
+                    const entry = entries[i];
+                    const title = entry.querySelector('title')?.textContent || '未知标题';
+                    const links = entry.querySelectorAll('link');
+
+                    const bookCard = document.createElement('div');
+                    bookCard.className = 'book-card';
+
+                    let foundCover = null;
+                    const coverRels = [
+                        'http://opds-spec.org/image',
+                        'http://opds-spec.org/cover',
+                        'http://opds-spec.org/image/thumbnail',
+                        'http://opds-spec.org/thumbnail',
+                        'cover',
+                        'thumbnail'
+                    ];
+
+                    const imageTypes = [
+                        'image/jpeg',
+                        'image/jpg',
+                        'image/png',
+                        'image/gif',
+                        'image/webp'
+                    ];
+
+                    const allLinks = [];
+
+                    // 检查所有链接
+                    links.forEach(link => {
+                        const rel = link.getAttribute('rel');
+                        const type = link.getAttribute('type');
+                        const href = link.getAttribute('href');
+
+                        allLinks.push({ rel, type, href });
+
+                        // 策略1: 检查rel属性
+                        if (!foundCover && coverRels.includes(rel)) {
+                            foundCover = { rel, type, href, strategy: 'OPDS rel' };
+                        }
+
+                        // 策略2: 检查MIME类型
+                        if (!foundCover && imageTypes.includes(type)) {
+                            foundCover = { rel, type, href, strategy: 'MIME type' };
+                        }
+
+                        // 策略3: 检查URL包含关键词
+                        if (!foundCover && href && (
+                            href.toLowerCase().includes('cover') ||
+                            href.toLowerCase().includes('thumb') ||
+                            href.toLowerCase().includes('image')
+                        )) {
+                            foundCover = { rel, type, href, strategy: 'heuristic' };
+                        }
+                    });
+
+                    if (foundCover) {
+                        coverCount++;
+                        bookCard.classList.add('found-cover');
+                        bookCard.innerHTML = `
+                            <div class="cover-test">
+                                <div>
+                                    <img class="cover-image"
+                                         src="${foundCover.href}"
+                                         alt="${title}"
+                                         onerror="this.classList.add('error-img'); this.nextElementSibling.style.display='block';"
+                                         onload="console.log('✅ 封面加载成功: ${title}');">
+                                    <p style="display:none; color:red;">❌ 封面加载失败</p>
+                                </div>
+                                <div>
+                                    <h4>📖 ${title}</h4>
+                                    <p><strong>策略:</strong> ${foundCover.strategy}</p>
+                                    <p><strong>封面URL:</strong> <a href="${foundCover.href}" target="_blank">${foundCover.href}</a></p>
+                                    <p><strong>rel:</strong> ${foundCover.rel || 'N/A'}</p>
+                                    <p><strong>type:</strong> ${foundCover.type || 'N/A'}</p>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        bookCard.classList.add('no-cover');
+                        bookCard.innerHTML = `
+                            <h4>📖 ${title}</h4>
+                            <p><strong>状态:</strong> ❌ 未找到封面</p>
+                            <div class="link-list">
+                                <strong>可用链接:</strong>
+                                ${allLinks.map(link => `
+                                    <br>• rel: ${link.rel || 'N/A'}, type: ${link.type || 'N/A'}, href: ${link.href ? link.href.substring(0, 80) + (link.href.length > 80 ? '...' : '') : 'N/A'}
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+
+                    bookListDiv.appendChild(bookCard);
+                }
+
+                // 更新统计信息
+                const noCoverCount = totalBooks - coverCount;
+                const coverPercentage = totalBooks > 0 ? Math.round((coverCount / totalBooks) * 100) : 0;
+
+                document.getElementById('cover-count').textContent = coverCount;
+                document.getElementById('no-cover-count').textContent = noCoverCount;
+                document.getElementById('cover-percentage').textContent = `${coverPercentage}%`;
+
+                console.log(`📊 总结: ${totalBooks} 本书, ${coverCount} 有封面 (${coverPercentage}%)`);
+
+            } catch (error) {
+                statusSpan.textContent = '连接失败';
+                statusSpan.style.color = 'red';
+                resultsDiv.innerHTML = `
+                    <div class="stats" style="background-color: #ffebee;">
+                        <h3>❌ 错误</h3>
+                        <p><strong>错误信息:</strong> ${error.message}</p>
+                        <p><strong>可能原因:</strong></p>
+                        <ul>
+                            <li>OPDS服务器无法访问</li>
+                            <li>认证信息错误</li>
+                            <li>CORS策略限制</li>
+                            <li>网络连接问题</li>
+                        </ul>
+                        <p><strong>建议:</strong> 请检查网络连接和服务器状态</p>
+                    </div>
+                `;
+                console.error('❌ 测试失败:', error);
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('connection-status').textContent = '未连接';
+            document.getElementById('connection-status').style.color = 'gray';
+        }
+
+        // 页面加载完成后的提示
+        window.addEventListener('load', () => {
+            console.log('🔧 OPDS封面调试工具已加载');
+            console.log('点击"测试OPDS封面"按钮开始测试');
+        });
+    </script>
+</body>
+</html>
