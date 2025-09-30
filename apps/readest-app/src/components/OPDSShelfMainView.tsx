@@ -393,29 +393,71 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     }
   }, [shelfId, loadShelfData]);
 
-  // Load cover images when books change
+  // Load cover images when books change (bounded concurrency, safe object URL management)
   useEffect(() => {
     let canceled = false;
 
     async function loadCovers() {
       if (!library || availableBooks.length === 0) return;
 
-      const newCovers = new Map(coverCache);
+      const booksToLoad = availableBooks.filter(
+        book => book.coverImageUrl && !coverCache.has(book.id),
+      );
 
-      for (const book of availableBooks) {
-        if (!book.coverImageUrl || newCovers.has(book.id)) continue;
+      if (booksToLoad.length === 0) return;
+
+      const concurrency = 2;
+      const tasks = booksToLoad.map(book => async () => {
+        if (!book.coverImageUrl) return;
 
         try {
           const blob = await opdsService.fetchImage(book.coverImageUrl, library.credentials);
           if (canceled) return;
-          newCovers.set(book.id, URL.createObjectURL(blob));
+
+          const objectUrl = URL.createObjectURL(blob);
+
+          setCoverCache(prev => {
+            if (canceled) {
+              URL.revokeObjectURL(objectUrl);
+              return prev;
+            }
+
+            const next = new Map(prev);
+            const existing = next.get(book.id);
+            if (existing && existing !== objectUrl) {
+              URL.revokeObjectURL(existing);
+            }
+            next.set(book.id, objectUrl);
+            return next;
+          });
         } catch (err) {
-          console.warn('加载封面失败:', book.title, err);
+          if (!canceled) {
+            console.warn('加载封面失败:', book.title, err);
+          }
+        }
+      });
+
+      const executing: Promise<void>[] = [];
+
+      for (const task of tasks) {
+        if (canceled) break;
+
+        const promise = task();
+        const wrappedPromise = promise.finally(() => {
+          const index = executing.indexOf(wrappedPromise);
+          if (index !== -1) {
+            executing.splice(index, 1);
+          }
+        });
+        executing.push(wrappedPromise);
+
+        if (executing.length >= concurrency) {
+          await Promise.race(executing);
         }
       }
 
-      if (!canceled) {
-        setCoverCache(newCovers);
+      if (executing.length > 0) {
+        await Promise.allSettled(executing);
       }
     }
 
@@ -424,7 +466,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     return () => {
       canceled = true;
     };
-  }, [availableBooks, library, opdsService]);
+  }, [availableBooks, library, opdsService, coverCache]);
 
   // Cleanup object URLs on unmount
   useEffect(() => {
