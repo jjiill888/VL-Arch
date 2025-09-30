@@ -147,7 +147,7 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
 
       if (booksToLoad.length === 0) return;
 
-      const concurrency = 2;
+      const concurrency = 6;
       const tasks = booksToLoad.map(book => async () => {
         if (!book.coverImageUrl) return;
 

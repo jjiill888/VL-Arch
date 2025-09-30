@@ -406,7 +406,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
 
       if (booksToLoad.length === 0) return;
 
-      const concurrency = 2;
+      const concurrency = 6;
       const tasks = booksToLoad.map(book => async () => {
         if (!book.coverImageUrl) return;
 
@@ -675,6 +675,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
                         <img
                           src={coverSrc}
                           alt={book.title}
+                          loading="lazy"
                           className='w-full h-full object-cover rounded'
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
