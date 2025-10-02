@@ -7,6 +7,12 @@ import Reader from '@/app/reader/components/Reader';
 export default function Page() {
   const router = useRouter();
   const ids = router.query['ids'] as string;
+  
+  // Simple test component to isolate the issue
+  if (!ids) {
+    return <div>Loading...</div>;
+  }
+  
   return (
     <EnvProvider>
       <AuthProvider>

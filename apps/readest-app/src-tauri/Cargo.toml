@@ -1,6 +1,6 @@
 [package]
 name = "vl-arch"
-version = "25.9.2"
+version = "25.9.3"
 description = "VL-Arch - Your online library"
 authors = ["VL-Arch Team"]
 license = ""
@@ -68,3 +68,24 @@ tauri-plugin-cli = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
+
+# Cross-platform release optimization - PERFORMANCE FOCUSED
+[profile.release]
+opt-level = 3            # Maximum performance optimization (aggressive inlining, loop unrolling)
+lto = "thin"             # Thin LTO - good balance of speed and compile time
+strip = true             # Strip symbols for smaller binary
+codegen-units = 16       # Parallel compilation for faster builds
+panic = "abort"          # Smaller panic handling
+overflow-checks = false  # Disable integer overflow checks for max speed
+debug = false            # No debug info for smaller binary
+incremental = false      # Disable incremental for better optimization
+
+# Additional performance flags
+[profile.release.package."*"]
+opt-level = 3            # Optimize all dependencies for max performance
+
+# Development profile (optional, for faster builds)
+[profile.dev]
+opt-level = 0
+lto = false
+strip = false

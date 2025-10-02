@@ -111,6 +111,124 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const containerRef: React.MutableRefObject<HTMLDivElement | null> = useRef(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const opdsShelfRef = useRef<OPDSShelfMainViewHandle>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Scroll detection for infinite loading
+  const handleScroll = useCallback(() => {
+    console.log('🔄 Scroll event triggered, currentView:', currentView);
+    
+    if (currentView !== 'shelf') {
+      console.log('❌ Not in shelf view, skipping scroll detection');
+      return;
+    }
+    
+    if (!opdsShelfRef.current) {
+      console.log('❌ opdsShelfRef.current is null');
+      return;
+    }
+
+    const { isInfiniteScrollEnabled, hasNextPage, isLoadingMore, loadingPage, triggerLoadNextPage } = opdsShelfRef.current;
+    
+    console.log('📊 Scroll state:', {
+      isInfiniteScrollEnabled,
+      hasNextPage,
+      isLoadingMore,
+      loadingPage
+    });
+    
+    if (!isInfiniteScrollEnabled) {
+      console.log('❌ Infinite scroll is disabled');
+      return;
+    }
+    
+    if (!hasNextPage) {
+      console.log('❌ No next page available');
+      return;
+    }
+    
+    if (isLoadingMore || loadingPage) {
+      console.log('❌ Already loading, skipping');
+      return;
+    }
+
+    const scrollContainer = osRef.current?.osInstance()?.elements().viewport;
+    if (!scrollContainer) {
+      console.log('❌ Scroll container not found');
+      return;
+    }
+
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+    const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+    
+    console.log('📏 Scroll metrics:', {
+      scrollTop,
+      scrollHeight,
+      clientHeight,
+      scrollPercentage: Math.round(scrollPercentage * 100) + '%'
+    });
+    
+    // Trigger loading when user scrolls to 60% of the content
+    if (scrollPercentage >= 0.6) {
+      console.log('🚀 Triggering load at', Math.round(scrollPercentage * 100) + '%');
+      
+      // Clear any existing timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      
+      // Debounce the loading to prevent multiple rapid calls
+      scrollTimeoutRef.current = setTimeout(() => {
+        console.log('📚 Executing infinite scroll load at', Math.round(scrollPercentage * 100) + '%');
+        triggerLoadNextPage();
+      }, 150); // 150ms debounce
+    }
+  }, [currentView]);
+
+  // Add scroll event listener
+  useEffect(() => {
+    console.log('🔧 Setting up scroll listener, currentView:', currentView);
+    
+    if (currentView !== 'shelf') {
+      console.log('❌ Not in shelf view, skipping scroll listener setup');
+      return;
+    }
+
+    // Add a small delay to ensure OverlayScrollbars is fully initialized
+    const setupScrollListener = (): (() => void) | null => {
+      const scrollContainer = osRef.current?.osInstance()?.elements().viewport;
+      if (!scrollContainer) {
+        console.log('❌ Scroll container not found for event listener setup');
+        return null;
+      }
+
+      console.log('✅ Adding scroll event listener to container');
+      scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+      
+      return () => {
+        console.log('🧹 Cleaning up scroll event listener');
+        scrollContainer.removeEventListener('scroll', handleScroll);
+        // Clean up timeout on unmount
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+      };
+    };
+
+    // Try to setup immediately, if that fails, try again after a short delay
+    const cleanup = setupScrollListener();
+    if (!cleanup) {
+      console.log('⏳ Retrying scroll listener setup after delay');
+      const timeoutId = setTimeout(() => {
+        setupScrollListener();
+      }, 100);
+      
+      return () => {
+        clearTimeout(timeoutId);
+      };
+    }
+
+    return cleanup;
+  }, [currentView, handleScroll]);
 
   useTheme({ systemUIVisible: true, appThemeColor: 'base-200' });
   useUICSS();
@@ -1003,8 +1121,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             defer
             aria-label=''
             ref={osRef}
-            className='flex-grow min-h-0 overflow-y-auto'
-            options={{ scrollbars: { autoHide: 'scroll' } }}
+            className='flex-grow min-h-0 overflow-y-auto overflow-x-hidden'
+            options={{ 
+              scrollbars: { 
+                autoHide: 'scroll'
+              }
+            }}
             events={{
               initialized: (instance) => {
                 const { content } = instance.elements();
@@ -1016,7 +1138,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           >
             <div
               className={clsx(
-                'scroll-container drop-zone flex-grow min-h-0 overflow-y-auto',
+                'scroll-container drop-zone flex-grow min-h-0 overflow-y-auto overflow-x-hidden',
                 isDragging && 'drag-over',
               )}
               style={{
@@ -1075,13 +1197,18 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             <h1 className='text-xl font-semibold'>{currentLibrary?.name || _('OPDS Library')}</h1>
           </div>
           <OverlayScrollbarsComponent
+            ref={osRef}
             defer
             aria-label=''
-            className='flex-grow min-h-0 overflow-y-auto'
-            options={{ scrollbars: { autoHide: 'scroll' } }}
+            className='flex-grow min-h-0 overflow-y-auto overflow-x-hidden'
+            options={{ 
+              scrollbars: { 
+                autoHide: 'scroll'
+              }
+            }}
           >
             <div
-              className='scroll-container flex-grow min-h-0 overflow-y-auto p-4'
+              className='scroll-container flex-grow min-h-0 overflow-y-auto overflow-x-hidden p-4'
               style={{
                 paddingTop: '16px',
                 paddingRight: `${insets.right + 16}px`,

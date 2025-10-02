@@ -207,14 +207,14 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
     return () => {
       canceled = true;
     };
-  }, [books, credentials, opdsService]);
+  }, [books, credentials, opdsService, coverCache]);
 
   // Cleanup object URLs on unmount
   useEffect(() => {
     return () => {
       coverCache.forEach(url => URL.revokeObjectURL(url));
     };
-  }, []);
+  }, [coverCache]);
 
   // Handle Android back button navigation
   const handleBackNavigation = useCallback(() => {
@@ -355,7 +355,9 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
                           {/* Book Cover */}
                           <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
                             {coverSrc ? (
-                              <img
+                              <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
                                 src={coverSrc}
                                 alt={book.title}
                                 className="w-full h-full object-cover rounded"
@@ -364,6 +366,7 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
                                   e.currentTarget.nextElementSibling?.classList.remove('hidden');
                                 }}
                               />
+                              </>
                             ) : null}
                             <div className={`${coverSrc ? 'hidden' : ''} flex items-center justify-center w-full h-full`}>
                               <MdBook className="w-8 h-8 text-base-content/30" />

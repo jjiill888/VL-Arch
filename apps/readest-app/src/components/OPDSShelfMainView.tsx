@@ -50,6 +50,11 @@ const mergeUniqueBooks = (existing: OPDSBook[], incoming: OPDSBook[]): OPDSBook[
 
 export interface OPDSShelfMainViewHandle {
   handleBack: () => boolean;
+  triggerLoadNextPage: () => void;
+  isInfiniteScrollEnabled: boolean;
+  hasNextPage: boolean;
+  isLoadingMore: boolean;
+  loadingPage: boolean;
 }
 
 interface OPDSShelfMainViewProps {
@@ -77,6 +82,13 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
   const [hasNextPage, setHasNextPage] = useState(false);
   const [hasPrevPage, setHasPrevPage] = useState(false);
   const [loadingPage, setLoadingPage] = useState(false);
+
+  // Infinite scroll state
+  const [isInfiniteScrollEnabled, setIsInfiniteScrollEnabled] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Auto-navigation state
+  const [autoNavigateToRecent, setAutoNavigateToRecent] = useState(true);
 
   // Cover image cache (book ID -> object URL)
   const [coverCache, setCoverCache] = useState<Map<string, string>>(new Map());
@@ -126,6 +138,9 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
       setHasNextPage(!!feed.nextLink);
       setHasPrevPage(!!feed.prevLink);
 
+      // Reset infinite scroll state
+      setIsLoadingMore(false);
+
       // Set up initial breadcrumb
       setBreadcrumbs([{ title: libraryData.name, url: libraryData.url }]);
 
@@ -166,6 +181,9 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
       // Set up OPDS standard pagination info
       setHasNextPage(!!feed.nextLink);
       setHasPrevPage(!!feed.prevLink);
+
+      // Reset infinite scroll state
+      setIsLoadingMore(false);
 
       // Reset to root breadcrumb
       setBreadcrumbs([{ title: library.name, url: library.url }]);
@@ -217,6 +235,9 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
       setHasNextPage(!!feed.nextLink);
       setHasPrevPage(!!feed.prevLink);
 
+      // Reset infinite scroll state
+      setIsLoadingMore(false);
+
       // Add to breadcrumbs
       setBreadcrumbs(prev => [...prev, { title: item.title, url: item.href }]);
 
@@ -264,6 +285,9 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
       setHasNextPage(!!feed.nextLink);
       setHasPrevPage(!!feed.prevLink);
 
+      // Reset infinite scroll state
+      setIsLoadingMore(false);
+
       // Trim breadcrumbs to current position
       setBreadcrumbs(breadcrumbs.slice(0, index + 1));
 
@@ -281,9 +305,10 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
 
   // Load next/previous page using OPDS standard pagination
   const loadNextPage = useCallback(async () => {
-    if (!library || !currentFeed?.nextLink || loadingPage) return;
+    if (!library || !currentFeed?.nextLink || loadingPage || isLoadingMore) return;
 
     setLoadingPage(true);
+    setIsLoadingMore(true);
     setError('');
 
     try {
@@ -316,8 +341,9 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
       });
     } finally {
       setLoadingPage(false);
+      setIsLoadingMore(false);
     }
-  }, [library, currentFeed, opdsService, loadingPage, breadcrumbs]);
+  }, [library, currentFeed, opdsService, loadingPage, isLoadingMore, breadcrumbs]);
 
   const loadPrevPage = useCallback(async () => {
     if (!library || !currentFeed?.prevLink || loadingPage) return;
@@ -473,22 +499,22 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
     return () => {
       coverCache.forEach(url => URL.revokeObjectURL(url));
     };
-  }, []);
+  }, [coverCache]);
 
-  // Expose imperative handle for parent to handle back navigation
-  useImperativeHandle(ref, () => ({
-    handleBack: () => {
-      if (breadcrumbs.length > 1) {
-        const parentIndex = breadcrumbs.length - 2;
-        void handleBreadcrumbClick(parentIndex);
-        return true;
-      } else if (onBackToHome) {
-        onBackToHome();
-        return true;
+  // Auto-navigate to "最近添加的书籍" when navigation items are loaded
+  useEffect(() => {
+    if (autoNavigateToRecent && navigationItems.length > 0 && breadcrumbs.length === 1) {
+      const recentlyAddedItem = navigationItems.find(item =>
+        item.title.includes('最近添加') || item.title.toLowerCase().includes('recent')
+      );
+
+      if (recentlyAddedItem) {
+        setAutoNavigateToRecent(false); // Only auto-navigate once
+        handleNavigationClick(recentlyAddedItem);
       }
-      return false;
-    },
-  }), [breadcrumbs, handleBreadcrumbClick, onBackToHome]);
+    }
+  }, [autoNavigateToRecent, navigationItems, breadcrumbs.length, handleNavigationClick]);
+
 
   // Handle Android back button navigation
   const handleBackNavigation = useCallback(async () => {
@@ -515,6 +541,38 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
   const handlePreviousPage = useCallback(() => {
     loadPrevPage();
   }, [loadPrevPage]);
+
+  // Expose loadNextPage function for parent component to call
+  useImperativeHandle(ref, () => ({
+    handleBack: () => {
+      if (breadcrumbs.length > 1) {
+        const parentIndex = breadcrumbs.length - 2;
+        void handleBreadcrumbClick(parentIndex);
+        return true;
+      } else if (onBackToHome) {
+        onBackToHome();
+        return true;
+      }
+      return false;
+    },
+    triggerLoadNextPage: () => {
+      if (isInfiniteScrollEnabled && hasNextPage && !isLoadingMore && !loadingPage) {
+        console.log('📚 OPDSShelfMainView: Calling loadNextPage function');
+        loadNextPage();
+      } else {
+        console.log('📚 OPDSShelfMainView: Cannot load next page', {
+          isInfiniteScrollEnabled,
+          hasNextPage,
+          isLoadingMore,
+          loadingPage
+        });
+      }
+    },
+    isInfiniteScrollEnabled,
+    hasNextPage,
+    isLoadingMore,
+    loadingPage,
+  }), [breadcrumbs, handleBreadcrumbClick, onBackToHome, isInfiniteScrollEnabled, hasNextPage, isLoadingMore, loadingPage, loadNextPage]);
 
   // Keyboard event handler
   useEffect(() => {
@@ -562,7 +620,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
   return (
     <div className='h-full flex flex-col'>
       {/* Header with breadcrumbs */}
-      <div className='mb-4'>
+      <div className='mb-4 flex-shrink-0'>
         {/* Main title and refresh button */}
         <div className='flex items-center justify-between mb-2'>
           <h2 className='text-xl font-bold text-base-content'>{shelf?.name}</h2>
@@ -597,7 +655,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
         <div className='flex flex-wrap items-center gap-3 text-xs text-base-content/70'>
           <div className='flex items-center gap-1'>
             <span className='font-medium'>{availableBooks.length}</span>
-            <span>{_('books on this page')}</span>
+            <span>{_('books loaded')}</span>
           </div>
           <div className='flex items-center gap-1'>
             <span className='font-medium'>{availableBooks.filter(book => opdsLibraryManager.isBookDownloaded(shelfId, book.id) || opdsLibraryManager.isOPDSBookInLocalLibrary(book)).length}</span>
@@ -611,6 +669,15 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
           )}
           <div className='flex items-center gap-1'>
             <span className='font-medium'>{_('Page')} {currentPage}</span>
+          </div>
+          <div className='flex items-center gap-1'>
+            <button
+              onClick={() => setIsInfiniteScrollEnabled(!isInfiniteScrollEnabled)}
+              className={`btn btn-xs ${isInfiniteScrollEnabled ? 'btn-success' : 'btn-outline'}`}
+              title={isInfiniteScrollEnabled ? '禁用无限滚动' : '启用无限滚动'}
+            >
+              {isInfiniteScrollEnabled ? '∞ 无限滚动' : '📄 分页模式'}
+            </button>
           </div>
         </div>
       </div>
@@ -672,7 +739,9 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
                   <div key={book.id} className='bg-base-100 rounded-lg shadow hover:shadow-lg transition-shadow p-2 sm:p-3 h-fit'>
                     <div className='aspect-[28/41] bg-base-300 rounded mb-2 flex items-center justify-center overflow-hidden'>
                       {coverSrc ? (
-                        <img
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
                           src={coverSrc}
                           alt={book.title}
                           loading="lazy"
@@ -682,6 +751,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
                             e.currentTarget.nextElementSibling?.classList.remove('hidden');
                           }}
                         />
+                        </>
                       ) : null}
                       <div className={`${coverSrc ? 'hidden' : ''} flex items-center justify-center w-full h-full`}>
                         <MdBook className='w-6 h-6 sm:w-8 sm:h-8 text-base-content/30' />
@@ -722,7 +792,7 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
             </div>
 
             {/* Bottom pagination controls */}
-            {(hasNextPage || hasPrevPage) && (
+            {!isInfiniteScrollEnabled && (hasNextPage || hasPrevPage) && (
               <div className='mt-4 pt-4 border-t border-base-300 flex items-center justify-center gap-3'>
                 <button
                   onClick={handlePreviousPage}
@@ -746,11 +816,37 @@ const OPDSShelfMainView = forwardRef<OPDSShelfMainViewHandle, OPDSShelfMainViewP
               </div>
             )}
 
+            {/* Infinite scroll loading indicator */}
+            {isInfiniteScrollEnabled && isLoadingMore && (
+              <div className='mt-4 pt-4 border-t border-base-300 flex items-center justify-center gap-2'>
+                <Spinner loading />
+                <span className='text-sm text-base-content/70'>{_('正在加载更多书籍...')}</span>
+              </div>
+            )}
+
+            {/* End of content indicator */}
+            {isInfiniteScrollEnabled && !hasNextPage && availableBooks.length > 0 && (
+              <div className='mt-4 pt-4 border-t border-base-300 text-center'>
+                <div className='text-sm text-base-content/50'>
+                  {_('已加载全部书籍')}
+                </div>
+              </div>
+            )}
+
             {/* Keyboard navigation hint */}
-            {(hasNextPage || hasPrevPage) && (
+            {!isInfiniteScrollEnabled && (hasNextPage || hasPrevPage) && (
               <div className='mt-2 text-center pb-4'>
                 <div className='text-xs text-base-content/50'>
                   {_('使用左右方向键翻页')}
+                </div>
+              </div>
+            )}
+
+            {/* Infinite scroll hint */}
+            {isInfiniteScrollEnabled && hasNextPage && (
+              <div className='mt-2 text-center pb-4'>
+                <div className='text-xs text-base-content/50'>
+                  {_('滚动到底部自动加载更多书籍')}
                 </div>
               </div>
             )}

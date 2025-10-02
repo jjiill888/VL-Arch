@@ -27,6 +27,29 @@ const nextConfig = {
   assetPrefix: '',
   reactStrictMode: true,
   serverExternalPackages: ['isows'],
+
+  // Cross-platform build optimizations - PERFORMANCE FOCUSED
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+    // React compiler optimizations for better runtime performance
+    reactRemoveProperties: process.env.NODE_ENV === 'production',
+  },
+
+  // Optimize bundle size and runtime performance
+  experimental: {
+    optimizePackageImports: [
+      'react-icons',
+      'lodash',
+      'date-fns',
+    ],
+  },
+
+  // Production optimizations
+  productionBrowserSourceMaps: false,  // Disable source maps for faster load
+  poweredByHeader: false,              // Remove X-Powered-By header
+
   transpilePackages: !isDev
     ? [
         'i18next-browser-languagedetector',
@@ -63,10 +86,6 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
-  swcMinify: true,
-  fallbacks: {
-    document: '/offline',
-  },
   workboxOptions: {
     disableDevLogs: true,
   },

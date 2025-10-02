@@ -152,14 +152,14 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
     return () => {
       canceled = true;
     };
-  }, [availableBooks, library, opdsService]);
+  }, [availableBooks, library, opdsService, coverCache]);
 
   // Cleanup object URLs on unmount
   useEffect(() => {
     return () => {
       coverCache.forEach(url => URL.revokeObjectURL(url));
     };
-  }, []);
+  }, [coverCache]);
 
   // Handle Android back button to close the dialog
   useBackHandler({
@@ -633,15 +633,18 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                             {/* Grid Mode - Card Layout */}
                             <div className="aspect-[28/41] bg-base-300 rounded-t-lg flex items-center justify-center overflow-hidden">
                               {coverSrc ? (
-                                <img
-                                  src={coverSrc}
-                                  alt={book.title}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                  }}
-                                />
+                                <>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={coverSrc}
+                                    alt={book.title}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                </>
                               ) : null}
                               <div className={`${coverSrc ? 'hidden' : ''} flex items-center justify-center w-full h-full`}>
                                 <MdBook className="w-8 h-8 text-base-content/30" />
@@ -683,15 +686,18 @@ const OPDSShelfView: React.FC<OPDSShelfViewProps> = ({
                             {/* List Mode - Horizontal Layout */}
                             <div className="w-16 h-20 bg-base-300 rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
                               {coverSrc ? (
-                                <img
-                                  src={coverSrc}
-                                  alt={book.title}
-                                  className="w-full h-full object-cover rounded"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                  }}
-                                />
+                                <>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={coverSrc}
+                                    alt={book.title}
+                                    className="w-full h-full object-cover rounded"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                </>
                               ) : null}
                               <div className={`${coverSrc ? 'hidden' : ''} flex items-center justify-center w-full h-full`}>
                                 <MdBook className="w-8 h-8 text-base-content/30" />

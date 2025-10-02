@@ -9,12 +9,12 @@ const config: Config = {
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  // IMPORTANT: Reduced safelist - only include classes that are truly dynamic
+  // The old wildcard patterns (e.g., /bg-./) generated 1000s of unused classes
   safelist: [
-    { pattern: /bg-./ },
-    { pattern: /text-./ },
-    { pattern: /fill-./ },
-    { pattern: /decoration-./ },
-    { pattern: /tooltip-./ },
+    // Only safelist specific dynamic classes that are generated at runtime
+    // For theme colors, tooltip variants, etc. - add specific patterns as needed
+    // Example: { pattern: /^bg-(primary|secondary|accent)$/ }
   ],
   theme: {
     extend: {
