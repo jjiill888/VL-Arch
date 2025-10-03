@@ -10,7 +10,8 @@ import {
   OPDSFeed,
   OPDSBook,
   OPDSNavigationItem,
-  OPDSCredentials
+  OPDSCredentials,
+  opdsLibraryManager
 } from '@/services/opds';
 
 interface OPDSLibraryViewProps {
@@ -19,6 +20,7 @@ interface OPDSLibraryViewProps {
   credentials?: OPDSCredentials;
   onClose: () => void;
   onBookDownload: (book: OPDSBook) => Promise<void>;
+  onLibraryRegistered?: () => void;
 }
 
 interface BreadcrumbItem {
@@ -32,6 +34,7 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
   credentials,
   onClose,
   onBookDownload,
+  onLibraryRegistered,
 }) => {
   const _ = useTranslation();
   const [opdsService] = useState(() => new OPDSService());
@@ -62,6 +65,18 @@ const OPDSLibraryView: React.FC<OPDSLibraryViewProps> = ({
 
       setBooks(feedBooks);
       setNavigationItems(feedNavigation);
+
+      try {
+        opdsLibraryManager.ensureLibraryRegistration({
+          url,
+          feed,
+          books: feedBooks,
+          credentials,
+        });
+        onLibraryRegistered?.();
+      } catch (registrationError) {
+        console.warn('Failed to register OPDS library visit:', registrationError);
+      }
 
       if (addToBreadcrumbs) {
         setBreadcrumbs(prev => [...prev, { title: feed.title, url }]);

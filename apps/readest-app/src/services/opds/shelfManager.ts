@@ -92,11 +92,12 @@ export class OPDSLibraryManager {
   }
 
   public createLibrary(feed: OPDSFeed, url: string, credentials?: { username: string; password: string }): OPDSLibrary {
+    const normalizedUrl = this.normalizeUrl(url);
     const libraryId = this.generateId();
     const library: OPDSLibrary = {
       id: libraryId,
       name: feed.title || 'Unknown Library',
-      url,
+      url: normalizedUrl,
       description: feed.subtitle,
       books: [],
       lastUpdated: Date.now(),
@@ -432,8 +433,83 @@ export class OPDSLibraryManager {
     return library.pagination.nextLink;
   }
 
+  public ensureLibraryRegistration(params: {
+    url: string;
+    feed: OPDSFeed;
+    books?: OPDSBook[];
+    credentials?: { username: string; password: string };
+  }): { library: OPDSLibrary; shelf: OPDSLibraryShelf } {
+    const { url, feed, books = [], credentials } = params;
+    const normalizedUrl = this.normalizeUrl(url);
+    const existingLibrary = this.findLibraryByUrl(normalizedUrl);
+
+    let library: OPDSLibrary;
+    if (existingLibrary) {
+      library = existingLibrary;
+      library.name = feed.title || library.name;
+      library.description = feed.subtitle;
+      library.url = normalizedUrl;
+      library.credentials = credentials;
+      this.libraries.set(library.id, library);
+    } else {
+      library = this.createLibrary(feed, normalizedUrl, credentials);
+    }
+
+    // Update books and pagination info, ensuring lastUpdated is refreshed
+    this.updateLibraryBooks(library.id, books, feed, false);
+
+    let shelf = this.getShelfByLibraryId(library.id);
+    if (!shelf) {
+      shelf = this.createShelf(library.id, library.name);
+    } else {
+      shelf.lastUpdated = Date.now();
+      this.shelves.set(shelf.id, shelf);
+      this.saveToStorage();
+    }
+
+    return { library, shelf };
+  }
+
   private generateId(): string {
     return `opds_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  private findLibraryByUrl(url: string): OPDSLibrary | undefined {
+    const normalizedUrl = this.normalizeUrl(url);
+    return Array.from(this.libraries.values()).find(library => {
+      const libraryUrl = this.normalizeUrl(library.url);
+      return (
+        libraryUrl === normalizedUrl ||
+        libraryUrl.startsWith(normalizedUrl) ||
+        normalizedUrl.startsWith(libraryUrl)
+      );
+    });
+  }
+
+  private normalizeUrl(url: string): string {
+    const trimmed = url.trim();
+    if (!trimmed) {
+      return trimmed;
+    }
+
+    try {
+      const parsed = new URL(trimmed);
+      parsed.hash = '';
+      let pathname = parsed.pathname || '/';
+      if (pathname !== '/') {
+        pathname = pathname.replace(/\/+$/, '');
+        if (!pathname.startsWith('/')) {
+          pathname = `/${pathname}`;
+        }
+        if (pathname === '') {
+          pathname = '/';
+        }
+      }
+      parsed.pathname = pathname;
+      return `${parsed.origin}${parsed.pathname}${parsed.search}`;
+    } catch {
+      return trimmed.replace(/\/+$/, '');
+    }
   }
 }
 

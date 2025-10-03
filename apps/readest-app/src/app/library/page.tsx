@@ -444,10 +444,13 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   }, [libraryBooks]);
 
   // Load OPDS libraries on component mount
+  const refreshOpdsLibraries = useCallback(() => {
+    setOpdsLibraries(opdsLibraryManager.getAllLibraries());
+  }, [setOpdsLibraries]);
+
   useEffect(() => {
-    const libraries = opdsLibraryManager.getAllLibraries();
-    setOpdsLibraries(libraries);
-  }, []);
+    refreshOpdsLibraries();
+  }, [refreshOpdsLibraries]);
 
   const processOpenWithFiles = React.useCallback(
     async (appService: AppService, openWithFiles: string[], libraryBooks: Book[]) => {
@@ -1265,6 +1268,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           }
         }}
         onBookDownload={handleOPDSBookDownload}
+        onLibraryRegistered={refreshOpdsLibraries}
       />
       <OPDSShelfView
         isOpen={showOPDSShelfView}
